@@ -7,6 +7,7 @@
 #include "Engine/Graphics/RenderBuffers.h"
 #include "Engine/Graphics/RenderTask.h"
 #include "Engine/Graphics/PostProcessEffect.h"
+#include "Engine/Graphics/RenderGraph/RenderGraph.h"
 #include "Engine/Engine/EngineService.h"
 #include "GBufferPass.h"
 #include "ForwardPass.h"
@@ -73,7 +74,9 @@ bool RendererService::Init()
 {
     PROFILE_MEM(Graphics);
 
-    // Register passes
+    // Register passes (singleton instances for legacy rendering path)
+    // Note: In RenderGraph architecture, passes are created per-frame and owned by the graph
+    // These singleton instances are kept for backward compatibility and legacy rendering path
     PassList.EnsureCapacity(64);
     PassList.Add(GBufferPass::Instance());
     PassList.Add(ShadowsPass::Instance());
@@ -108,7 +111,8 @@ bool RendererService::Init()
     }
 
 #if GPU_ENABLE_PRELOADING_RESOURCES
-    // Init child services
+    // Init child services (singleton passes for legacy path)
+    // In RenderGraph architecture, pass initialization happens when they are created
     for (int32 i = 0; i < PassList.Count(); i++)
     {
         if (PassList[i]->Init())
@@ -124,7 +128,9 @@ bool RendererService::Init()
 
 void RendererService::Dispose()
 {
-    // Dispose child services
+    // Dispose child services (singleton passes for legacy path)
+    // Note: In RenderGraph architecture, passes are owned by the graph and cleaned up automatically
+    // These singleton instances are kept for backward compatibility
     for (int32 i = 0; i < PassList.Count(); i++)
     {
         PassList[i]->Dispose();
@@ -369,6 +375,11 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
     auto& view = renderContext.View;
     ASSERT(renderContext.Buffers && renderContext.Buffers->GetWidth() > 0);
 
+    // Check if we should use RenderGraph architecture
+    // For now, use a compile-time flag to enable/disable RenderGraph
+    // TODO: Add runtime configuration option
+    const bool useRenderGraph = false; // Set to true to enable RenderGraph path
+
     // Perform postFx volumes blending and query before rendering
     task->CollectPostFxVolumes(renderContext);
     renderContext.List->BlendSettings();
@@ -563,6 +574,34 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
         JobSystem::Wait(sortDrawCallsJob);
     }
 
+    // RenderGraph execution path
+    if (useRenderGraph)
+    {
+        PROFILE_GPU_CPU_NAMED("RenderGraph Execute");
+
+        // Create and build the render graph
+        RenderGraph graph;
+        BuildRenderGraph(graph, renderContext, renderContextBatch);
+
+        // Compile the graph (optimize, resolve dependencies)
+        if (!graph.Compile())
+        {
+            LOG(Error, "Failed to compile render graph");
+            return;
+        }
+
+        // Execute the graph
+        if (!graph.Execute(context))
+        {
+            LOG(Error, "Failed to execute render graph");
+            return;
+        }
+
+        // Graph automatically cleans up when it goes out of scope
+        return;
+    }
+
+    // Legacy rendering path (original hardcoded pipeline)
     // Get the light accumulation buffer
     auto outputFormat = renderContext.Buffers->GetOutputFormat();
     auto tempFlags = GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget;
@@ -857,3 +896,204 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
     RenderTargetPool::Release(tempBuffer);
     RenderTargetPool::Release(frameBuffer);
 }
+
+void Renderer::BuildRenderGraph(RenderGraph& graph, RenderContext& renderContext, RenderContextBatch& renderContextBatch)
+{
+    PROFILE_CPU_NAMED("Build RenderGraph");
+
+    auto& view = renderContext.View;
+    auto& setup = renderContext.List->Setup;
+    const bool isGBufferDebug = GBufferPass::IsDebugView(view.Mode);
+
+    // Clear any previous graph state
+    graph.Clear();
+
+    // Global SDF Pass (if enabled)
+    if (setup.UseGlobalSDF)
+    {
+        // Note: GlobalSignDistanceFieldPass may need special handling as it's not a standard RenderGraphPass yet
+        // For now, we'll handle it in the legacy path
+    }
+
+    // Global Surface Atlas Pass (if enabled)
+    if (setup.UseGlobalSurfaceAtlas)
+    {
+        // Note: GlobalSurfaceAtlasPass may need special handling
+        // For now, we'll handle it in the legacy path
+    }
+
+    // GBuffer Pass - always needed for deferred rendering
+    if (!isGBufferDebug || view.Mode == ViewMode::MaterialComplexity)
+    {
+        auto* gbufferPass = New<GBufferPass>();
+        graph.AddPass(gbufferPass);
+    }
+
+    // Motion Vectors Pass
+    if (setup.UseMotionVectors)
+    {
+        auto* motionBlurPass = New<MotionBlurPass>();
+        graph.AddPass(motionBlurPass);
+    }
+
+    // Ambient Occlusion Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::AO) && 
+        renderContext.List->Settings.AmbientOcclusion.Enabled &&
+        !isGBufferDebug)
+    {
+        auto* aoPass = New<AmbientOcclusionPass>();
+        graph.AddPass(aoPass);
+    }
+
+    // Shadow Maps Pass
+    bool drawShadows = !isGBufferDebug && EnumHasAnyFlags(view.Flags, ViewFlags::Shadows) && ShadowsPass::Instance()->IsReady();
+    switch (view.Mode)
+    {
+    case ViewMode::QuadOverdraw:
+    case ViewMode::Emissive:
+    case ViewMode::LightmapUVsDensity:
+    case ViewMode::GlobalSurfaceAtlas:
+    case ViewMode::GlobalSDF:
+    case ViewMode::MaterialComplexity:
+    case ViewMode::VertexColors:
+        drawShadows = false;
+        break;
+    }
+    if (drawShadows)
+    {
+        auto* shadowsPass = New<ShadowsPass>();
+        graph.AddPass(shadowsPass);
+    }
+
+    // Light Pass - deferred lighting
+    if (!isGBufferDebug)
+    {
+        auto* lightPass = New<LightPass>();
+        graph.AddPass(lightPass);
+    }
+
+    // Global Illumination Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::GI) && !isGBufferDebug)
+    {
+        switch (renderContext.List->Settings.GlobalIllumination.Mode)
+        {
+        case GlobalIlluminationMode::DDGI:
+        {
+            auto* ddgiPass = New<DynamicDiffuseGlobalIlluminationPass>();
+            graph.AddPass(ddgiPass);
+            break;
+        }
+        }
+    }
+
+    // Reflections Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::Reflections) && !isGBufferDebug)
+    {
+        auto* reflectionsPass = New<ReflectionsPass>();
+        graph.AddPass(reflectionsPass);
+    }
+
+    // Screen Space Reflections Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::SSR) && 
+        renderContext.List->Settings.ScreenSpaceReflections.Intensity > ZeroTolerance &&
+        !isGBufferDebug)
+    {
+        auto* ssrPass = New<ScreenSpaceReflectionsPass>();
+        graph.AddPass(ssrPass);
+    }
+
+    // Volumetric Fog Pass
+    if (setup.UseVolumetricFog && !isGBufferDebug)
+    {
+        auto* volumetricFogPass = New<VolumetricFogPass>();
+        graph.AddPass(volumetricFogPass);
+    }
+
+    // Forward Pass - for transparent objects and forward rendering
+    if (!isGBufferDebug)
+    {
+        auto* forwardPass = New<ForwardPass>();
+        graph.AddPass(forwardPass);
+    }
+
+    // Skip post-processing for certain view modes
+    if (view.Mode == ViewMode::NoPostFx || 
+        view.Mode == ViewMode::Wireframe ||
+        isGBufferDebug)
+    {
+        return;
+    }
+
+    // Depth of Field Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::DepthOfField) &&
+        renderContext.List->Settings.DepthOfField.Enabled)
+    {
+        auto* dofPass = New<DepthOfFieldPass>();
+        graph.AddPass(dofPass);
+    }
+
+    // Motion Blur Pass (rendering)
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::MotionBlur) &&
+        renderContext.List->Settings.MotionBlur.Enabled &&
+        renderContext.List->Settings.MotionBlur.Scale > ZeroTolerance)
+    {
+        // Motion blur rendering pass (different from motion vectors generation)
+        // Note: MotionBlurPass handles both motion vectors and blur rendering
+    }
+
+    // Eye Adaptation Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::EyeAdaptation))
+    {
+        auto* eyeAdaptationPass = New<EyeAdaptationPass>();
+        graph.AddPass(eyeAdaptationPass);
+    }
+
+    // Histogram Pass (for eye adaptation)
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::EyeAdaptation))
+    {
+        auto* histogramPass = New<HistogramPass>();
+        graph.AddPass(histogramPass);
+    }
+
+    // Color Grading Pass
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::ColorGrading))
+    {
+        auto* colorGradingPass = New<ColorGradingPass>();
+        graph.AddPass(colorGradingPass);
+    }
+
+    // Post Processing Pass (bloom, tone mapping, etc.)
+    if (EnumHasAnyFlags(view.Flags, ViewFlags::Bloom | ViewFlags::ToneMapping))
+    {
+        auto* postProcessingPass = New<PostProcessingPass>();
+        graph.AddPass(postProcessingPass);
+    }
+
+    // Temporal Anti-Aliasing Pass
+    if (renderContext.List->Settings.AntiAliasing.Mode == AntialiasingMode::TemporalAntialiasing)
+    {
+        auto* taaPass = New<TAA>();
+        graph.AddPass(taaPass);
+    }
+
+    // Anti-Aliasing Pass (FXAA/SMAA)
+    const auto aaMode = renderContext.List->Settings.AntiAliasing.Mode;
+    if (aaMode == AntialiasingMode::FastApproximateAntialiasing)
+    {
+        auto* fxaaPass = New<FXAA>();
+        graph.AddPass(fxaaPass);
+    }
+    else if (aaMode == AntialiasingMode::SubpixelMorphologicalAntialiasing)
+    {
+        auto* smaaPass = New<SMAA>();
+        graph.AddPass(smaaPass);
+    }
+
+    // Contrast Adaptive Sharpening Pass
+    if (ContrastAdaptiveSharpeningPass::Instance()->CanRender(renderContext))
+    {
+        auto* casPass = New<ContrastAdaptiveSharpeningPass>();
+        graph.AddPass(casPass);
+    }
+}
+

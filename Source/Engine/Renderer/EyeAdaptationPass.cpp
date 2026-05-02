@@ -298,3 +298,29 @@ bool EyeAdaptationPass::setupResources()
 
     return false;
 }
+
+void EyeAdaptationPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare input/output resource (color buffer is both read and written)
+    _colorBufferRef = builder.ReadWriteTexture("ColorBuffer", RenderGraphTextureAccess::RTV);
+}
+
+void EyeAdaptationPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    RenderContext& renderContext = *_renderContext;
+    
+    // Get actual GPU texture from RenderGraph reference
+    GPUTexture* colorBuffer = _colorBufferRef.IsValid() ? _colorBufferRef.GetTexture() : nullptr;
+    
+    if (!colorBuffer)
+        return;
+    
+    // Execute the actual rendering logic
+    Render(renderContext, colorBuffer);
+}

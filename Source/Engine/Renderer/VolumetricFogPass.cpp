@@ -765,3 +765,26 @@ void VolumetricFogPass::InitCircleBuffer()
         LOG(Fatal, "Failed to setup volumetric fog buffers.");
     }
 }
+
+void VolumetricFogPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare input resources
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    
+    // Declare output resource (3D volume texture)
+    _volumetricFogRef = builder.WriteTexture("VolumetricFog", RenderGraphTextureAccess::UAV);
+}
+
+void VolumetricFogPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    RenderContext& renderContext = *_renderContext;
+    
+    // Execute the actual rendering logic
+    Render(renderContext);
+}

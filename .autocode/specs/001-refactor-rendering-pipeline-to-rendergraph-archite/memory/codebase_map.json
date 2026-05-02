@@ -1,0 +1,15 @@
+{
+  "discovered_files": {
+    "Source/Engine/Renderer/AtmospherePreCompute.h": {
+      "description": "AtmospherePreCompute 是一个独立的异步预计算服务，不需要迁移到 RenderGraph 架构。它跨多帧缓存结果，不是每帧渲染管线的一部分。其他 Pass 通过 GetCache() 访问预计算数据。",
+      "category": "general",
+      "discovered_at": "2026-05-02T07:22:25.983Z"
+    },
+    "Source/Engine/Renderer/ProbesRenderer.h": {
+      "description": "ProbesRenderer 是一个独立的异步烘焙服务，不需要迁移到 RenderGraph 架构。它在后台运行，有自己的调度和超时逻辑，按需烘焙探针并缓存结果。",
+      "category": "general",
+      "discovered_at": "2026-05-02T07:22:28.138Z"
+    }
+  },
+  "last_updated": "2026-05-02T07:22:28.138Z"
+}

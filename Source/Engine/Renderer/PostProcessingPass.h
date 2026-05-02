@@ -4,11 +4,12 @@
 
 #include "RendererPass.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 /// <summary>
 /// Post-processing rendering service.
 /// </summary>
-class PostProcessingPass : public RendererPass<PostProcessingPass>
+class PostProcessingPass : public RendererPass<PostProcessingPass>, public RenderGraphRasterPass
 {
 private:
     AssetReference<Shader> _shader;
@@ -23,6 +24,12 @@ private:
     AssetReference<Texture> _defaultLensStar;
     AssetReference<Texture> _defaultLensDirt;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _inputRef;
+    RenderGraphTextureRef _outputRef;
+    RenderGraphTextureRef _colorGradingLUTRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
     /// <summary>
     /// Perform postFx rendering for the input task
@@ -32,6 +39,13 @@ public:
     /// <param name="output">Output frame</param>
     /// <param name="colorGradingLUT">The prebaked LUT for color grading and tonemapping.</param>
     void Render(RenderContext& renderContext, GPUTexture* input, GPUTexture* output, GPUTexture* colorGradingLUT);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
+
+private:
+    void RenderInternal(RenderContext& renderContext, GPUContext* context, GPUTexture* input, GPUTexture* output, GPUTexture* colorGradingLUT);
 
 private:
 #if COMPILE_WITH_DEV_ENV

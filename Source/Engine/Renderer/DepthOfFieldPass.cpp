@@ -428,11 +428,13 @@ void DepthOfFieldPass::Render(RenderContext& renderContext, GPUTexture*& frame, 
 
 void DepthOfFieldPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare input dependencies: depth buffer
+    // Declare input dependencies: depth buffer and input frame
     _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    _inputFrameRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0);
     
-    // Declare read
+    // Declare reads
     ReadTexture(_depthBufferRef);
+    ReadTexture(_inputFrameRef);
     
     // Create output frame texture
     const int32 width = _renderContext->Buffers->GetWidth();

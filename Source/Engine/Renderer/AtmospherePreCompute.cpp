@@ -18,6 +18,15 @@
 #include "Engine/Content/AssetReference.h"
 #include "Engine/Graphics/RenderTargetPool.h"
 
+// NOTE: AtmospherePreCompute is an independent precomputation service that runs asynchronously
+// and caches results across multiple frames. It does NOT need to be integrated into the 
+// RenderGraph architecture because:
+// 1. It's not part of the per-frame rendering pipeline
+// 2. It runs on-demand with its own scheduling logic
+// 3. Results are cached and accessed via GetCache() by other passes
+// 4. It uses its own SceneRenderTask for computation
+// Other RenderGraph passes can safely access the precomputed textures as external resources.
+
 // Amount of frames to wait for data from atmosphere precompute job
 #define ATMOSPHERE_PRECOMPUTE_LATENCY_FRAMES 1
 

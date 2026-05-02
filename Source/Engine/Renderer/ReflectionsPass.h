@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
 #include "Engine/Content/Assets/Model.h"
 #include "Engine/Content/Assets/Shader.h"
@@ -13,7 +14,7 @@
 /// <summary>
 /// Reflections rendering service
 /// </summary>
-class ReflectionsPass : public RendererPass<ReflectionsPass>
+class ReflectionsPass : public RendererPass<ReflectionsPass>, public RenderGraphRasterPass
 {
 private:
     AssetReference<Shader> _shader;
@@ -27,6 +28,15 @@ private:
     AssetReference<Texture> _preIntegratedGF;
     bool _depthBounds = false;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _gbuffer0Ref;
+    RenderGraphTextureRef _gbuffer1Ref;
+    RenderGraphTextureRef _gbuffer2Ref;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _reflectionOutputRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
     /// <summary>
     /// Perform reflections pass rendering for the input task.
@@ -34,6 +44,10 @@ public:
     /// <param name="renderContext">The rendering context.</param>
     /// <param name="lightBuffer">The light buffer.</param>
     void Render(RenderContext& renderContext, GPUTextureView* lightBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 public:
     // [RendererPass]

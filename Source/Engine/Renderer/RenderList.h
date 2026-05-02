@@ -22,6 +22,7 @@ class IPostFxSettingsProvider;
 class CubeTexture;
 struct RenderContext;
 struct RenderContextBatch;
+class RenderGraphBuilder;
 
 struct RenderLightData
 {
@@ -490,6 +491,11 @@ public:
     /// Temporary objects buffer that contains ShaderObjectData for each DrawCall reused during scene rendering (eg. by skybox).
     /// </summary>
     DynamicTypedBuffer TempObjectBuffer;
+
+    /// <summary>
+    /// The RenderGraph builder for declaring resources during pass setup (optional, only valid during RenderGraph pass setup).
+    /// </summary>
+    RenderGraphBuilder* GraphBuilder = nullptr;
 
     typedef Function<void(GPUContext* context, RenderContextBatch& renderContextBatch, int32 renderContextIndex)> DelayedDraw;
     void AddDelayedDraw(DelayedDraw&& func);

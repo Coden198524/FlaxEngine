@@ -385,13 +385,15 @@ void MotionBlurPass::Render(RenderContext& renderContext, GPUTexture*& frame, GP
 
 void MotionBlurPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare input dependencies: depth and velocity buffers
+    // Declare input dependencies: depth, velocity buffers, and input frame
     _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
     _velocityBufferRef = builder.ImportTexture(TEXT("MotionVectors"), _renderContext->Buffers->MotionVectors);
+    _inputFrameRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0);
     
     // Declare reads
     ReadTexture(_depthBufferRef);
     ReadTexture(_velocityBufferRef);
+    ReadTexture(_inputFrameRef);
     
     // Create output frame texture
     const int32 width = _renderContext->Buffers->GetWidth();

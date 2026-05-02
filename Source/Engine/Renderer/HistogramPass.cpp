@@ -120,3 +120,32 @@ bool HistogramPass::setupResources()
 
     return false;
 }
+
+void HistogramPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare input resource
+    _colorBufferRef = builder.ReadTexture("ColorBuffer", RenderGraphTextureAccess::SRV);
+    
+    // Declare output buffer resource
+    _histogramBufferRef = builder.WriteBuffer("HistogramBuffer", RenderGraphBufferAccess::UAV);
+}
+
+void HistogramPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    RenderContext& renderContext = *_renderContext;
+    
+    // Get actual GPU texture from RenderGraph reference
+    GPUTexture* colorBuffer = _colorBufferRef.IsValid() ? _colorBufferRef.GetTexture() : nullptr;
+    
+    if (!colorBuffer)
+        return;
+    
+    // Execute the actual rendering logic
+    Render(renderContext, colorBuffer);
+}

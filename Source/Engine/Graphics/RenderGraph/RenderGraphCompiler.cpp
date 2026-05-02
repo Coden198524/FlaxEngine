@@ -1,12 +1,10 @@
 // Copyright (c) Wojciech Figat. All rights reserved.
 
 #include "RenderGraphCompiler.h"
+#include "RenderGraph.h"
 #include "RenderGraphPass.h"
 #include "Engine/Core/Log.h"
 #include "Engine/Core/Collections/Dictionary.h"
-
-// Forward declaration - will be defined in RenderGraph.h
-class RenderGraph;
 
 bool RenderGraphCompiler::Compile(RenderGraph* graph)
 {
@@ -46,9 +44,6 @@ void RenderGraphCompiler::Clear()
 
 void RenderGraphCompiler::CullPasses(RenderGraph* graph)
 {
-    // Note: Implementation requires access to RenderGraph internals
-    // This is a placeholder that will be completed when RenderGraph is available
-    
     // Algorithm:
     // 1. Start from passes marked as NeverCull or with exported outputs
     // 2. Recursively mark all dependencies as used
@@ -56,11 +51,69 @@ void RenderGraphCompiler::CullPasses(RenderGraph* graph)
     
     HashSet<int32> usedPasses;
     
-    // TODO: Iterate through all passes in graph
-    // For each pass that cannot be culled or has exported outputs:
-    //   MarkPassAsUsed(graph, pass, usedPasses);
+    // Mark all passes as culled initially
+    for (int32 i = 0; i < graph->GetPassCount(); i++)
+    {
+        RenderGraphPass* pass = graph->GetPass(i);
+        if (pass)
+            pass->_culled = true;
+    }
     
-    // TODO: Mark all passes not in usedPasses as culled
+    // Find passes that cannot be culled
+    for (int32 i = 0; i < graph->GetPassCount(); i++)
+    {
+        RenderGraphPass* pass = graph->GetPass(i);
+        if (!pass)
+            continue;
+            
+        // Check if pass cannot be culled
+        if (!pass->CanCull())
+        {
+            MarkPassAsUsed(graph, pass, usedPasses);
+            continue;
+        }
+        
+        // Check if pass has exported outputs
+        bool hasExportedOutput = false;
+        
+        // Check texture writes
+        for (int32 j = 0; j < pass->_textureWrites.Count(); j++)
+        {
+            int32 texIndex = pass->_textureWrites[j].Index;
+            if (texIndex >= 0 && texIndex < graph->GetTextureCount())
+            {
+                const auto& texResource = graph->_textures[texIndex];
+                if ((texResource.Desc.Flags & RenderGraphResourceFlags::Exported) != RenderGraphResourceFlags::None)
+                {
+                    hasExportedOutput = true;
+                    break;
+                }
+            }
+        }
+        
+        // Check buffer writes
+        if (!hasExportedOutput)
+        {
+            for (int32 j = 0; j < pass->_bufferWrites.Count(); j++)
+            {
+                int32 bufIndex = pass->_bufferWrites[j].Index;
+                if (bufIndex >= 0 && bufIndex < graph->GetBufferCount())
+                {
+                    const auto& bufResource = graph->_buffers[bufIndex];
+                    if ((bufResource.Desc.Flags & RenderGraphResourceFlags::Exported) != RenderGraphResourceFlags::None)
+                    {
+                        hasExportedOutput = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (hasExportedOutput)
+        {
+            MarkPassAsUsed(graph, pass, usedPasses);
+        }
+    }
 }
 
 void RenderGraphCompiler::MarkPassAsUsed(RenderGraph* graph, RenderGraphPass* pass, HashSet<int32>& usedPasses)
@@ -77,8 +130,38 @@ void RenderGraphCompiler::MarkPassAsUsed(RenderGraph* graph, RenderGraphPass* pa
     pass->_culled = false;
 
     // Recursively mark all passes that produce resources this pass reads
-    // TODO: Iterate through pass->_textureReads and pass->_bufferReads
-    // Find the passes that write to those resources and mark them as used
+    
+    // For each texture this pass reads
+    for (int32 i = 0; i < pass->_textureReads.Count(); i++)
+    {
+        int32 texIndex = pass->_textureReads[i].Index;
+        if (texIndex >= 0 && texIndex < graph->GetTextureCount())
+        {
+            // Find the pass that produces this texture
+            int32 producerPassIndex = graph->_textures[texIndex].ProducerPass;
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            {
+                RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
+                MarkPassAsUsed(graph, producerPass, usedPasses);
+            }
+        }
+    }
+    
+    // For each buffer this pass reads
+    for (int32 i = 0; i < pass->_bufferReads.Count(); i++)
+    {
+        int32 bufIndex = pass->_bufferReads[i].Index;
+        if (bufIndex >= 0 && bufIndex < graph->GetBufferCount())
+        {
+            // Find the pass that produces this buffer
+            int32 producerPassIndex = graph->_buffers[bufIndex].ProducerPass;
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            {
+                RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
+                MarkPassAsUsed(graph, producerPass, usedPasses);
+            }
+        }
+    }
 }
 
 bool RenderGraphCompiler::DetermineExecutionOrder(RenderGraph* graph)
@@ -89,13 +172,19 @@ bool RenderGraphCompiler::DetermineExecutionOrder(RenderGraph* graph)
 
     _sortedPasses.Clear();
 
-    // TODO: Iterate through all non-culled passes in graph
-    // For each pass:
-    //   if (!visited.Contains(pass->_passIndex))
-    //   {
-    //       if (!TopologicalSortDFS(graph, pass, visited, recursionStack))
-    //           return false; // Cycle detected
-    //   }
+    // Iterate through all non-culled passes in graph
+    for (int32 i = 0; i < graph->GetPassCount(); i++)
+    {
+        RenderGraphPass* pass = graph->GetPass(i);
+        if (!pass || pass->_culled)
+            continue;
+            
+        if (!visited.Contains(pass->_passIndex))
+        {
+            if (!TopologicalSortDFS(graph, pass, visited, recursionStack))
+                return false; // Cycle detected
+        }
+    }
 
     // Reverse the list (DFS produces reverse topological order)
     _sortedPasses.Reverse();
@@ -123,10 +212,40 @@ bool RenderGraphCompiler::TopologicalSortDFS(RenderGraph* graph, RenderGraphPass
     recursionStack.Add(pass->_passIndex);
 
     // Visit all dependencies (passes that write to resources this pass reads)
-    // TODO: For each resource this pass reads:
-    //   Find the pass that writes to it
-    //   if (!TopologicalSortDFS(graph, writerPass, visited, recursionStack))
-    //       return false;
+    
+    // For each texture this pass reads
+    for (int32 i = 0; i < pass->_textureReads.Count(); i++)
+    {
+        int32 texIndex = pass->_textureReads[i].Index;
+        if (texIndex >= 0 && texIndex < graph->GetTextureCount())
+        {
+            // Find the pass that produces this texture
+            int32 producerPassIndex = graph->_textures[texIndex].ProducerPass;
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            {
+                RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
+                if (!TopologicalSortDFS(graph, producerPass, visited, recursionStack))
+                    return false;
+            }
+        }
+    }
+    
+    // For each buffer this pass reads
+    for (int32 i = 0; i < pass->_bufferReads.Count(); i++)
+    {
+        int32 bufIndex = pass->_bufferReads[i].Index;
+        if (bufIndex >= 0 && bufIndex < graph->GetBufferCount())
+        {
+            // Find the pass that produces this buffer
+            int32 producerPassIndex = graph->_buffers[bufIndex].ProducerPass;
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            {
+                RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
+                if (!TopologicalSortDFS(graph, producerPass, visited, recursionStack))
+                    return false;
+            }
+        }
+    }
 
     // Mark as visited
     visited.Add(pass->_passIndex);
@@ -140,9 +259,8 @@ bool RenderGraphCompiler::TopologicalSortDFS(RenderGraph* graph, RenderGraphPass
 
 void RenderGraphCompiler::AnalyzeResourceLifetimes(RenderGraph* graph)
 {
-    // TODO: Get texture and buffer counts from graph
-    int32 textureCount = 0; // graph->GetTextureCount();
-    int32 bufferCount = 0;  // graph->GetBufferCount();
+    int32 textureCount = graph->GetTextureCount();
+    int32 bufferCount = graph->GetBufferCount();
 
     _textureLifetimes.Resize(textureCount);
     _bufferLifetimes.Resize(bufferCount);
@@ -151,13 +269,17 @@ void RenderGraphCompiler::AnalyzeResourceLifetimes(RenderGraph* graph)
     for (int32 i = 0; i < textureCount; i++)
     {
         _textureLifetimes[i] = ResourceLifetime();
-        // TODO: Check if texture is imported/exported
+        const auto& texResource = graph->_textures[i];
+        _textureLifetimes[i].IsImported = (texResource.Desc.Flags & RenderGraphResourceFlags::Imported) != RenderGraphResourceFlags::None;
+        _textureLifetimes[i].IsExported = (texResource.Desc.Flags & RenderGraphResourceFlags::Exported) != RenderGraphResourceFlags::None;
     }
 
     for (int32 i = 0; i < bufferCount; i++)
     {
         _bufferLifetimes[i] = ResourceLifetime();
-        // TODO: Check if buffer is imported/exported
+        const auto& bufResource = graph->_buffers[i];
+        _bufferLifetimes[i].IsImported = (bufResource.Desc.Flags & RenderGraphResourceFlags::Imported) != RenderGraphResourceFlags::None;
+        _bufferLifetimes[i].IsExported = (bufResource.Desc.Flags & RenderGraphResourceFlags::Exported) != RenderGraphResourceFlags::None;
     }
 
     // Analyze usage in sorted passes

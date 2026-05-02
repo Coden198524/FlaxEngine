@@ -1570,3 +1570,23 @@ void GlobalSurfaceAtlasPass::RasterizeActor(Actor* actor, void* actorObject, con
         surfaceAtlasData.AsyncNewObjects.Add({ actorObject, actor, bounds, actorObjectBounds, useVisibility });
     }
 }
+
+void GlobalSurfaceAtlasPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare output resources (atlas textures)
+    builder.WriteTexture("GlobalSurfaceAtlasDepth", RenderGraphTextureAccess::RenderTarget);
+    builder.WriteTexture("GlobalSurfaceAtlasGBuffer0", RenderGraphTextureAccess::RenderTarget);
+    builder.WriteTexture("GlobalSurfaceAtlasGBuffer1", RenderGraphTextureAccess::RenderTarget);
+    builder.WriteTexture("GlobalSurfaceAtlasLighting", RenderGraphTextureAccess::RenderTarget);
+    
+    // Declare dependencies on Global SDF
+    builder.ReadTexture("GlobalSDF", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSDFMip", RenderGraphTextureAccess::SRV);
+}
+
+void GlobalSurfaceAtlasPass::Execute(GPUContext* context)
+{
+    // Execute method is called by RenderGraph during execution phase
+    // The actual rendering logic is handled by the Render method which is called
+    // from the main rendering pipeline with proper RenderContext
+}

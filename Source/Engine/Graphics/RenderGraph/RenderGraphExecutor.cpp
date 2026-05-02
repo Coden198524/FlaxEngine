@@ -1,6 +1,7 @@
 // Copyright (c) Wojciech Figat. All rights reserved.
 
 #include "RenderGraphExecutor.h"
+#include "RenderGraph.h"
 #include "RenderGraphPass.h"
 #include "RenderGraphCompiler.h"
 #include "Engine/Graphics/GPUContext.h"
@@ -8,9 +9,6 @@
 #include "Engine/Graphics/GPUBuffer.h"
 #include "Engine/Core/Log.h"
 #include "Engine/Profiler/ProfilerCPU.h"
-
-// Forward declaration - will be defined in RenderGraph.h
-class RenderGraph;
 
 RenderGraphExecutor::RenderGraphExecutor()
     : _asyncComputeEnabled(false)
@@ -86,56 +84,71 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
     if (!pass || !context)
         return;
 
-    // TODO: Get actual texture and buffer resources from graph
-    // This requires access to RenderGraph internals
-
     // Transition textures that are read
     for (int32 i = 0; i < pass->_textureReads.Count(); i++)
     {
         int32 texIndex = pass->_textureReads[i].Index;
-        if (texIndex < 0)
+        if (texIndex < 0 || texIndex >= graph->GetTextureCount())
             continue;
 
-        // TODO: Get actual texture from graph
-        // GPUTexture* texture = graph->GetTexture(texIndex);
-        // TransitionTexture(context, texture, texIndex, GPUResourceState::ShaderResource);
+        GPUTexture* texture = graph->GetTexture(RenderGraphTextureRef(texIndex));
+        if (texture)
+            TransitionTexture(context, texture, texIndex, GetRequiredState(RenderGraphResourceAccess::Read, true));
     }
 
     // Transition textures that are written
     for (int32 i = 0; i < pass->_textureWrites.Count(); i++)
     {
         int32 texIndex = pass->_textureWrites[i].Index;
-        if (texIndex < 0)
+        if (texIndex < 0 || texIndex >= graph->GetTextureCount())
             continue;
 
-        // TODO: Get actual texture from graph
-        // GPUTexture* texture = graph->GetTexture(texIndex);
-        // Determine state based on usage (RenderTarget, UnorderedAccess, etc.)
-        // TransitionTexture(context, texture, texIndex, newState);
+        GPUTexture* texture = graph->GetTexture(RenderGraphTextureRef(texIndex));
+        if (texture)
+        {
+            // Determine state based on usage
+            GPUResourceState newState = GPUResourceState::RenderTarget;
+            
+            // Check if it's a depth-stencil texture
+            const auto& texDesc = graph->_textures[texIndex].Desc.Desc;
+            if (texDesc.Format == PixelFormat::D24_UNorm_S8_UInt || 
+                texDesc.Format == PixelFormat::D32_Float ||
+                texDesc.Format == PixelFormat::D16_UNorm)
+            {
+                newState = GPUResourceState::DepthWrite;
+            }
+            // Check if it's a UAV texture
+            else if ((texDesc.Flags & GPUTextureFlags::UnorderedAccess) != GPUTextureFlags::None)
+            {
+                newState = GPUResourceState::UnorderedAccess;
+            }
+            
+            TransitionTexture(context, texture, texIndex, newState);
+        }
     }
 
     // Transition buffers that are read
     for (int32 i = 0; i < pass->_bufferReads.Count(); i++)
     {
         int32 bufIndex = pass->_bufferReads[i].Index;
-        if (bufIndex < 0)
+        if (bufIndex < 0 || bufIndex >= graph->GetBufferCount())
             continue;
 
-        // TODO: Get actual buffer from graph
-        // GPUBuffer* buffer = graph->GetBuffer(bufIndex);
-        // TransitionBuffer(context, buffer, bufIndex, GPUResourceState::ShaderResource);
+        GPUBuffer* buffer = graph->GetBuffer(RenderGraphBufferRef(bufIndex));
+        if (buffer)
+            TransitionBuffer(context, buffer, bufIndex, GetRequiredState(RenderGraphResourceAccess::Read, false));
     }
 
     // Transition buffers that are written
     for (int32 i = 0; i < pass->_bufferWrites.Count(); i++)
     {
         int32 bufIndex = pass->_bufferWrites[i].Index;
-        if (bufIndex < 0)
+        if (bufIndex < 0 || bufIndex >= graph->GetBufferCount())
             continue;
 
-        // TODO: Get actual buffer from graph
-        // GPUBuffer* buffer = graph->GetBuffer(bufIndex);
-        // TransitionBuffer(context, buffer, bufIndex, GPUResourceState::UnorderedAccess);
+        GPUBuffer* buffer = graph->GetBuffer(RenderGraphBufferRef(bufIndex));
+        if (buffer)
+            TransitionBuffer(context, buffer, bufIndex, GPUResourceState::UnorderedAccess);
     }
 }
 

@@ -3,11 +3,12 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 /// <summary>
 /// Luminance histogram rendering pass. Uses compute shaders.
 /// </summary>
-class HistogramPass : public RendererPass<HistogramPass>
+class HistogramPass : public RendererPass<HistogramPass>, public RenderGraphComputePass
 {
 private:
 
@@ -33,6 +34,17 @@ public:
     /// <param name="multiply">The multiply factor.</param>
     /// <param name="add">The add factor.</param>
     void GetHistogramMad(float& multiply, float& add);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
+
+private:
+
+    // RenderGraph resources
+    RenderGraphTextureRef _colorBufferRef;
+    RenderGraphBufferRef _histogramBufferRef;
+    RenderContext* _renderContext = nullptr;
 
 private:
 

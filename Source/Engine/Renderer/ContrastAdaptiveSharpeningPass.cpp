@@ -90,3 +90,33 @@ void ContrastAdaptiveSharpeningPass::Render(const RenderContext& renderContext, 
     context->SetRenderTarget(output);
     context->DrawFullscreenTriangle();
 }
+
+void ContrastAdaptiveSharpeningPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare input resource
+    _inputRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+    
+    // Declare output resource
+    _outputRef = builder.WriteTexture("OutputFrame", RenderGraphTextureAccess::RTV);
+}
+
+void ContrastAdaptiveSharpeningPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    const RenderContext& renderContext = *_renderContext;
+    
+    // Get actual GPU textures from RenderGraph references
+    GPUTexture* input = _inputRef.IsValid() ? _inputRef.GetTexture() : nullptr;
+    GPUTexture* output = _outputRef.IsValid() ? _outputRef.GetTexture() : nullptr;
+    
+    if (!input || !output || !CanRender(renderContext))
+        return;
+    
+    // Execute the actual rendering logic
+    Render(renderContext, input, output->View());
+}

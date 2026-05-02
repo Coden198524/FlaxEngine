@@ -7,6 +7,7 @@
 #include "GlobalSignDistanceFieldPass.h"
 #include "GI/GlobalSurfaceAtlasPass.h"
 #include "Utils/MultiScaler.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Engine/Engine.h"
 #include "Engine/Platform/Window.h"
 #include "Engine/Content/Content.h"
@@ -412,3 +413,36 @@ void ScreenSpaceReflectionsPass::OnShaderReloading(Asset* obj)
 }
 
 #endif
+
+void ScreenSpaceReflectionsPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare input dependencies: GBuffer data
+    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), _renderContext->Buffers->GBuffer0);
+    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
+    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), _renderContext->Buffers->GBuffer2);
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    
+    // Declare reads
+    ReadTexture(_gbuffer0Ref);
+    ReadTexture(_gbuffer1Ref);
+    ReadTexture(_gbuffer2Ref);
+    ReadTexture(_depthBufferRef);
+    
+    // Create SSR output texture
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+    _ssrOutputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R16G16B16A16_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("SSR_Output")));
+    
+    // Declare write
+    WriteTexture(_ssrOutputRef);
+}
+
+void ScreenSpaceReflectionsPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    // Execute the existing Render logic
+    Render(*_renderContext, nullptr, _renderContext->Buffers->GBuffer0->View());
+}
+

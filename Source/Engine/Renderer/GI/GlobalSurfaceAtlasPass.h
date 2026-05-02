@@ -3,11 +3,12 @@
 #pragma once
 
 #include "../RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 /// <summary>
 /// Global Surface Atlas rendering pass. Captures scene geometry into a single atlas texture which contains surface diffuse color, normal vector, emission light, and calculates direct+indirect lighting. Used by Global Illumination and Reflections.
 /// </summary>
-class FLAXENGINE_API GlobalSurfaceAtlasPass : public RendererPass<GlobalSurfaceAtlasPass>
+class FLAXENGINE_API GlobalSurfaceAtlasPass : public RendererPass<GlobalSurfaceAtlasPass>, public RenderGraphRasterPass
 {
 public:
     // Constant buffer data for Global Surface Atlas access on a GPU.
@@ -91,6 +92,10 @@ public:
     /// <param name="context">The GPU context.</param>
     /// <param name="output">The output buffer.</param>
     void RenderDebug(RenderContext& renderContext, GPUContext* context, GPUTexture* output);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
     // Gets the culling view position (xyz) and view distance (w)
     void GetCullingData(Vector4& cullingPosDistance) const;
