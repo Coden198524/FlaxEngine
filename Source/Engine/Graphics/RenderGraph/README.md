@@ -682,6 +682,109 @@ void BuildRenderGraph(RenderGraph& graph, RenderContext& renderContext)
 }
 ```
 
+## 独立渲染服务
+
+并非所有渲染功能都需要迁移到 RenderGraph 架构。某些服务是独立的异步系统，有自己的调度和生命周期管理，不属于每帧渲染管线的一部分。
+
+### 不需要迁移的服务
+
+以下服务保持为独立系统，**不应**迁移到 RenderGraph：
+
+#### 1. AtmospherePreCompute（大气散射预计算）
+
+**为什么不迁移：**
+- 异步预计算服务，跨多帧缓存结果
+- 不是每帧渲染管线的一部分
+- 按需触发，有自己的调度逻辑
+- 使用独立的 SceneRenderTask 进行计算
+- 结果通过 `GetCache()` 方法提供给其他 Pass
+
+**使用方式：**
+```cpp
+// 在 RenderGraph Pass 中访问预计算数据
+void MyAtmospherePass::Execute(GPUContext* context)
+{
+    AtmosphereCache cache;
+    if (AtmospherePreCompute::GetCache(&cache))
+    {
+        // 使用预计算的纹理
+        context->BindSR(0, cache.Transmittance);
+        context->BindSR(1, cache.Irradiance);
+        context->BindSR(2, cache.Inscatter);
+    }
+}
+```
+
+#### 2. ProbesRenderer（光照探针渲染）
+
+**为什么不迁移：**
+- 独立的异步烘焙服务，在后台运行
+- 处理环境探针和天空光照的烘焙，有自己的调度和超时逻辑
+- 探针按需烘焙并缓存，可能跨多帧完成
+- 使用独立的 SceneRenderTask 渲染立方体贴图面
+- 烘焙过程可以分布到多帧（通过 `MaxWorkPerFrame` 控制）
+
+**使用方式：**
+```cpp
+// 请求烘焙环境探针
+ProbesRenderer::Bake(environmentProbe, timeout);
+
+// 请求烘焙天空光照
+ProbesRenderer::Bake(skyLight, timeout);
+
+// 烘焙完成后，数据自动存储在 Actor 属性中
+// 光照 Pass 直接从 Actor 访问烘焙数据
+```
+
+### 设计原则
+
+判断一个渲染功能是否应该迁移到 RenderGraph：
+
+**应该迁移（作为 RenderGraph Pass）：**
+- ✅ 每帧执行的渲染操作
+- ✅ 需要与其他 Pass 共享资源
+- ✅ 有明确的输入输出依赖关系
+- ✅ 需要资源生命周期管理和优化
+
+**保持独立（不迁移）：**
+- ❌ 异步后台任务（预计算、烘焙）
+- ❌ 跨多帧的长时间操作
+- ❌ 有独立调度逻辑的服务
+- ❌ 结果缓存并复用的系统
+- ❌ 使用独立 RenderTask 的服务
+
+### 与 RenderGraph 的集成
+
+独立服务可以通过以下方式与 RenderGraph 集成：
+
+1. **作为外部资源提供者**：预计算的纹理可以被 RenderGraph Pass 访问
+2. **触发机制**：RenderGraph Pass 可以检测并触发预计算（如 `AtmospherePreCompute::GetCache()` 会自动触发更新）
+3. **数据访问**：烘焙的数据存储在 Actor 属性中，Pass 直接访问
+
+```cpp
+// 示例：在 RenderGraph Pass 中使用独立服务的数据
+class MyLightingPass : public RenderGraphRasterPass
+{
+public:
+    void Execute(GPUContext* context) override
+    {
+        // 访问大气预计算数据
+        AtmosphereCache atmosphere;
+        if (AtmospherePreCompute::GetCache(&atmosphere))
+        {
+            context->BindSR(5, atmosphere.Inscatter);
+        }
+        
+        // 访问环境探针数据（已烘焙并缓存在 Actor 中）
+        for (auto* probe : environmentProbes)
+        {
+            auto probeTexture = probe->GetProbeTexture();
+            // 使用探针纹理进行光照计算
+        }
+    }
+};
+```
+
 ## 总结
 
 RenderGraph 提供了一个现代化、高效且易于使用的渲染管线架构。通过声明式的资源管理和自动依赖追踪，它大大简化了渲染代码的编写和维护，同时提供了出色的性能和灵活性。
