@@ -12,9 +12,11 @@
 #include "Engine/Graphics/RenderTargetPool.h"
 #include "Engine/Graphics/RenderTask.h"
 #include "Engine/Graphics/Shaders/GPUShader.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 
 ForwardPass::ForwardPass()
-    : _psApplyDistortion(nullptr)
+    : RenderGraphRasterPass(TEXT("ForwardPass"))
+    , _psApplyDistortion(nullptr)
 {
 }
 
@@ -149,4 +151,55 @@ void ForwardPass::Render(RenderContext& renderContext, GPUTexture*& input, GPUTe
         context->SetRenderTarget(depthBufferHandle, output->View());
         mainCache->ExecuteDrawCalls(renderContext, forwardList, input->View());
     }
+}
+
+void ForwardPass::Setup(RenderGraphBuilder& builder)
+{
+    if (!_renderContext)
+        return;
+
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+
+    // Import input frame and depth buffer
+    _inputRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0); // TODO: Use actual input
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+
+    // Create output frame
+    _outputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+        width, height,
+        PixelFormat::R11G11B10_Float,
+        GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+        TEXT("ForwardOutput")));
+
+    // Create distortion buffer if needed
+    auto& distortionList = _renderContext->List->DrawCallsLists[(int32)DrawCallsListType::Distortion];
+    if (!distortionList.IsEmpty())
+    {
+        _distortionRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+            width, height,
+            PixelFormat::R8G8B8A8_UNorm,
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("Distortion")));
+        WriteTexture(_distortionRef);
+    }
+
+    // Declare dependencies
+    ReadTexture(_inputRef);
+    ReadTexture(_depthBufferRef);
+
+    // Declare outputs
+    SetRenderTarget(0, _outputRef);
+    SetDepthStencil(_depthBufferRef, true); // Read-only depth
+}
+
+void ForwardPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+
+    // Use existing Render implementation
+    GPUTexture* input = _renderContext->Buffers->GBuffer0; // TODO: Get from builder
+    GPUTexture* output = _renderContext->Buffers->GBuffer0; // TODO: Get from builder
+    Render(*_renderContext, input, output);
 }

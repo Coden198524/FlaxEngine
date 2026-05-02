@@ -39,6 +39,12 @@ public:
     bool UseVSync = false;
 
     /// <summary>
+    /// Enables the new RenderGraph-driven rendering pipeline. When disabled, uses the legacy rendering path.
+    /// </summary>
+    API_FIELD(Attributes="EditorOrder(30), DefaultValue(false), EditorDisplay(\"General\", \"Use RenderGraph\")")
+    bool UseRenderGraph = false;
+
+    /// <summary>
     /// Anti Aliasing quality setting.
     /// </summary>
     API_FIELD(Attributes="EditorOrder(1000), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\", \"AA Quality\")")

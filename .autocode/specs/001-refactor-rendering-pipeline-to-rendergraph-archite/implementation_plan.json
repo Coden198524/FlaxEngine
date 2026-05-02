@@ -1,0 +1,522 @@
+{
+  "spec_id": "001-refactor-rendering-pipeline-to-rendergraph-archite",
+  "feature": "将渲染管线重构为 RenderGraph 架构",
+  "created_at": "2026-05-02T13:00:00.000Z",
+  "split_plan": false,
+  "workflow_type": "refactor",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "核心 RenderGraph 系统实现",
+      "description": "实现 RenderGraph 的核心基础设施，包括资源管理、Pass 调度、依赖追踪和执行引擎",
+      "subtasks": [
+        {
+          "id": "1.1",
+          "title": "实现 RenderGraph 核心类",
+          "description": "创建 RenderGraph.h 和 RenderGraph.cpp，实现图的构建、编译和执行逻辑。包括资源注册、Pass 添加、依赖关系追踪和拓扑排序。",
+          "status": "pending",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraph.h",
+            "Source/Engine/Graphics/RenderGraph/RenderGraph.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "编译通过，核心类可以实例化"
+          },
+          "notes": "使用有向无环图（DAG）结构，支持自动依赖解析和 Pass 剔除"
+        },
+        {
+          "id": "1.2",
+          "title": "实现 RenderGraphPass 基类",
+          "description": "创建 RenderGraphPass.h，定义 Pass 的基类接口，包括 Setup、Execute 方法，资源声明接口和 Pass 元数据。",
+          "status": "completed",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraphPass.h"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "编译通过，可以继承并实现自定义 Pass"
+          },
+          "notes": "RenderGraphPass.h 已完整实现，包含基类接口、Setup/Execute 方法、资源声明接口和三种 Pass 类型（Raster、Compute、Copy）",
+          "updated_at": "2026-05-02T05:25:03.783Z"
+        },
+        {
+          "id": "1.3",
+          "title": "实现 RenderGraph 资源管理器",
+          "description": "创建 RenderGraphResourceManager.h/cpp，实现纹理和缓冲区的生命周期管理、资源池化、别名分配和内存优化。",
+          "status": "pending",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraphResourceManager.h",
+            "Source/Engine/Graphics/RenderGraph/RenderGraphResourceManager.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "资源可以正确分配、复用和释放"
+          },
+          "notes": "集成现有的 RenderTargetPool，支持资源别名以减少内存占用"
+        },
+        {
+          "id": "1.4",
+          "title": "实现 RenderGraph 编译器",
+          "description": "创建 RenderGraphCompiler.h/cpp，实现图的编译优化，包括 Pass 剔除、资源生命周期分析、内存分配优化和执行顺序确定。",
+          "status": "completed",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraphCompiler.h",
+            "Source/Engine/Graphics/RenderGraph/RenderGraphCompiler.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "可以正确剔除未使用的 Pass，优化资源分配"
+          },
+          "notes": "RenderGraphCompiler.h/cpp 已完整实现，包含 Pass 剔除、资源生命周期分析、内存分配优化（资源别名）和执行顺序确定（拓扑排序）",
+          "updated_at": "2026-05-02T05:25:10.262Z"
+        },
+        {
+          "id": "1.5",
+          "title": "实现 RenderGraph 执行器",
+          "description": "创建 RenderGraphExecutor.h/cpp，实现图的执行引擎，包括 Pass 调度、资源状态转换、GPU 命令提交和同步管理。",
+          "status": "completed",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraphExecutor.h",
+            "Source/Engine/Graphics/RenderGraph/RenderGraphExecutor.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "可以正确执行 Pass 序列并管理资源状态"
+          },
+          "notes": "RenderGraphExecutor.h/cpp 已完整实现，包含 Pass 调度、资源状态转换、GPU 命令提交、同步管理，支持异步计算和拷贝队列",
+          "updated_at": "2026-05-02T05:25:17.120Z"
+        },
+        {
+          "id": "1.6",
+          "title": "实现 RenderGraph 调试工具",
+          "description": "创建 RenderGraphDebug.h/cpp，实现图的可视化导出、Pass 性能分析、资源使用统计和调试信息输出。",
+          "status": "completed",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraphDebug.h",
+            "Source/Engine/Graphics/RenderGraph/RenderGraphDebug.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "可以导出 DOT 格式的图结构，显示资源使用统计"
+          },
+          "notes": "已创建 RenderGraphDebug.h/cpp，实现图的可视化导出、Pass 性能分析、资源使用统计和调试信息输出。支持导出为 Graphviz DOT 格式用于可视化。",
+          "updated_at": "2026-05-02T05:18:26.963Z"
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "基础渲染 Pass 迁移",
+      "description": "将核心渲染 Pass（GBuffer、Forward、Shadow、Light）迁移到 RenderGraph 架构",
+      "subtasks": [
+        {
+          "id": "2.1",
+          "title": "迁移 GBufferPass 到 RenderGraph",
+          "description": "重构 GBufferPass，使其继承 RenderGraphPass，声明输入输出资源，实现 Setup 和 Execute 方法。",
+          "status": "in_progress",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/GBufferPass.h",
+            "Source/Engine/Renderer/GBufferPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "GBuffer Pass 可以在 RenderGraph 中正确执行"
+          },
+          "notes": "保持现有功能不变，仅改变架构"
+        },
+        {
+          "id": "2.2",
+          "title": "迁移 ShadowsPass 到 RenderGraph",
+          "description": "重构 ShadowsPass，适配 RenderGraph 架构，处理多个阴影贴图的资源声明和级联阴影。",
+          "status": "completed",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/ShadowsPass.h",
+            "Source/Engine/Renderer/ShadowsPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "阴影渲染正常工作"
+          },
+          "notes": "ShadowsPass 已成功迁移到 RenderGraph 架构。继承 RenderGraphRasterPass，实现了 Setup 和 Execute 方法，声明了阴影贴图资源（ShadowMapAtlas, StaticShadowMapAtlas），支持多个阴影贴图和级联阴影。",
+          "updated_at": "2026-05-02T05:33:45.280Z"
+        },
+        {
+          "id": "2.3",
+          "title": "迁移 LightPass 到 RenderGraph",
+          "description": "重构 LightPass，声明对 GBuffer 和 Shadow 的依赖，实现延迟光照计算。",
+          "status": "completed",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/LightPass.h",
+            "Source/Engine/Renderer/LightPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "光照计算正确，依赖关系正确建立"
+          },
+          "notes": "LightPass 已成功迁移到 RenderGraph 架构。继承 RenderGraphRasterPass，实现了 Setup 和 Execute 方法，声明了对 GBuffer 和 Shadow 的依赖，实现延迟光照计算。",
+          "updated_at": "2026-05-02T05:33:46.182Z"
+        },
+        {
+          "id": "2.4",
+          "title": "迁移 ForwardPass 到 RenderGraph",
+          "description": "重构 ForwardPass，处理透明物体和前向渲染路径，声明深度缓冲依赖。",
+          "status": "completed",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/ForwardPass.h",
+            "Source/Engine/Renderer/ForwardPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "前向渲染正常工作"
+          },
+          "notes": "ForwardPass 已成功迁移到 RenderGraph 架构。继承 RenderGraphRasterPass，实现了 Setup 和 Execute 方法，处理透明物体和前向渲染路径，声明了深度缓冲依赖。",
+          "updated_at": "2026-05-02T05:33:47.551Z"
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "后处理 Pass 迁移",
+      "description": "将所有后处理效果（AO、SSR、DOF、Motion Blur、AA 等）迁移到 RenderGraph",
+      "subtasks": [
+        {
+          "id": "3.1",
+          "title": "迁移 AmbientOcclusionPass",
+          "description": "重构 AO Pass，声明对深度和法线的依赖，输出 AO 纹理。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/AmbientOcclusionPass.h",
+            "Source/Engine/Renderer/AmbientOcclusionPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "AO 效果正常显示"
+          },
+          "notes": "支持 SSAO 和 HBAO 算法"
+        },
+        {
+          "id": "3.2",
+          "title": "迁移 ReflectionsPass 和 ScreenSpaceReflectionsPass",
+          "description": "重构反射相关 Pass，处理环境反射和屏幕空间反射。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/ReflectionsPass.h",
+            "Source/Engine/Renderer/ReflectionsPass.cpp",
+            "Source/Engine/Renderer/ScreenSpaceReflectionsPass.h",
+            "Source/Engine/Renderer/ScreenSpaceReflectionsPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "反射效果正常工作"
+          },
+          "notes": "SSR 依赖 GBuffer 数据"
+        },
+        {
+          "id": "3.3",
+          "title": "迁移 DepthOfFieldPass 和 MotionBlurPass",
+          "description": "重构景深和运动模糊 Pass，声明对速度缓冲的依赖。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/DepthOfFieldPass.h",
+            "Source/Engine/Renderer/DepthOfFieldPass.cpp",
+            "Source/Engine/Renderer/MotionBlurPass.h",
+            "Source/Engine/Renderer/MotionBlurPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "DOF 和运动模糊效果正常"
+          },
+          "notes": "运动模糊需要速度缓冲"
+        },
+        {
+          "id": "3.4",
+          "title": "迁移抗锯齿 Pass（FXAA、TAA、SMAA）",
+          "description": "重构所有抗锯齿 Pass，适配 RenderGraph 架构。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/AntiAliasing/FXAA.h",
+            "Source/Engine/Renderer/AntiAliasing/FXAA.cpp",
+            "Source/Engine/Renderer/AntiAliasing/TAA.h",
+            "Source/Engine/Renderer/AntiAliasing/TAA.cpp",
+            "Source/Engine/Renderer/AntiAliasing/SMAA.h",
+            "Source/Engine/Renderer/AntiAliasing/SMAA.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "所有 AA 模式正常工作"
+          },
+          "notes": "TAA 需要历史缓冲管理"
+        },
+        {
+          "id": "3.5",
+          "title": "迁移色调映射和后处理 Pass",
+          "description": "重构 PostProcessingPass、ColorGradingPass、EyeAdaptationPass、HistogramPass 等。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/PostProcessingPass.h",
+            "Source/Engine/Renderer/PostProcessingPass.cpp",
+            "Source/Engine/Renderer/ColorGradingPass.h",
+            "Source/Engine/Renderer/ColorGradingPass.cpp",
+            "Source/Engine/Renderer/EyeAdaptationPass.h",
+            "Source/Engine/Renderer/EyeAdaptationPass.cpp",
+            "Source/Engine/Renderer/HistogramPass.h",
+            "Source/Engine/Renderer/HistogramPass.cpp",
+            "Source/Engine/Renderer/ContrastAdaptiveSharpeningPass.h",
+            "Source/Engine/Renderer/ContrastAdaptiveSharpeningPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "后处理链正常工作"
+          },
+          "notes": "保持现有的后处理顺序"
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "高级渲染特性迁移",
+      "description": "迁移体积雾、全局光照、大气散射等高级渲染特性",
+      "subtasks": [
+        {
+          "id": "4.1",
+          "title": "迁移 VolumetricFogPass",
+          "description": "重构体积雾 Pass，处理体积纹理资源和多次散射计算。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/VolumetricFogPass.h",
+            "Source/Engine/Renderer/VolumetricFogPass.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "体积雾效果正常渲染"
+          },
+          "notes": "需要 3D 纹理资源支持"
+        },
+        {
+          "id": "4.2",
+          "title": "迁移全局光照相关 Pass",
+          "description": "重构 GlobalSignDistanceFieldPass、GlobalSurfaceAtlasPass、DynamicDiffuseGlobalIlluminationPass。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/GlobalSignDistanceFieldPass.h",
+            "Source/Engine/Renderer/GlobalSignDistanceFieldPass.cpp",
+            "Source/Engine/Renderer/GI/GlobalSurfaceAtlasPass.h",
+            "Source/Engine/Renderer/GI/GlobalSurfaceAtlasPass.cpp",
+            "Source/Engine/Renderer/GI/DynamicDiffuseGlobalIllumination.h",
+            "Source/Engine/Renderer/GI/DynamicDiffuseGlobalIllumination.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "GI 效果正常工作"
+          },
+          "notes": "DDGI 需要多个 Pass 协作"
+        },
+        {
+          "id": "4.3",
+          "title": "迁移 AtmospherePreCompute 和探针渲染",
+          "description": "重构大气散射预计算和光照探针渲染。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/AtmospherePreCompute.h",
+            "Source/Engine/Renderer/AtmospherePreCompute.cpp",
+            "Source/Engine/Renderer/ProbesRenderer.h",
+            "Source/Engine/Renderer/ProbesRenderer.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "大气和探针渲染正常"
+          },
+          "notes": "预计算可以作为独立的 RenderGraph"
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "主渲染器集成",
+      "description": "重构主渲染器，使用 RenderGraph 替代硬编码的渲染流程",
+      "subtasks": [
+        {
+          "id": "5.1",
+          "title": "创建 RenderGraph 构建器",
+          "description": "在 Renderer.cpp 中实现 BuildRenderGraph 函数，根据场景设置动态构建渲染图。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/Renderer.cpp",
+            "Source/Engine/Renderer/Renderer.h"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "可以根据渲染设置构建完整的渲染图"
+          },
+          "notes": "支持根据 RenderSetup 动态启用/禁用 Pass"
+        },
+        {
+          "id": "5.2",
+          "title": "重构 Renderer::Render 主函数",
+          "description": "修改主渲染函数，使用 RenderGraph 执行渲染，替代原有的硬编码流程。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/Renderer.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "完整的渲染流程通过 RenderGraph 执行"
+          },
+          "notes": "保持向后兼容，支持渐进式迁移"
+        },
+        {
+          "id": "5.3",
+          "title": "更新 RenderContext 和 RenderList",
+          "description": "修改 RenderContext 和 RenderList，添加 RenderGraph 相关的上下文信息。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/RenderList.h",
+            "Source/Engine/Renderer/RenderList.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "渲染上下文正确传递给各个 Pass"
+          },
+          "notes": "保持现有接口兼容性"
+        },
+        {
+          "id": "5.4",
+          "title": "更新 RendererService 初始化",
+          "description": "修改渲染器服务的初始化和清理逻辑，适配 RenderGraph 架构。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Renderer/Renderer.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "渲染器正确初始化和清理"
+          },
+          "notes": "Pass 不再是全局单例"
+        }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "name": "测试、优化和文档",
+      "description": "全面测试、性能优化和文档编写",
+      "subtasks": [
+        {
+          "id": "6.1",
+          "title": "创建 RenderGraph 单元测试",
+          "description": "编写单元测试，覆盖资源管理、Pass 调度、依赖解析等核心功能。",
+          "status": "pending",
+          "files_to_create": [
+            "Source/Engine/Tests/TestRenderGraph.cpp"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "所有单元测试通过"
+          },
+          "notes": "测试边界情况和错误处理"
+        },
+        {
+          "id": "6.2",
+          "title": "性能分析和优化",
+          "description": "使用 Profiler 分析 RenderGraph 性能，优化资源分配、Pass 调度和内存使用。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraph.cpp",
+            "Source/Engine/Graphics/RenderGraph/RenderGraphResourceManager.cpp"
+          ],
+          "verification": {
+            "type": "manual",
+            "run": "性能不低于原有实现，内存使用优化"
+          },
+          "notes": "重点优化资源别名和 Pass 剔除"
+        },
+        {
+          "id": "6.3",
+          "title": "添加 C# 绑定",
+          "description": "为 RenderGraph 系统添加 C# API 绑定，支持脚本化渲染。",
+          "status": "pending",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/RenderGraph.cs"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "可以从 C# 创建和执行 RenderGraph"
+          },
+          "notes": "支持自定义 Pass 的脚本化"
+        },
+        {
+          "id": "6.4",
+          "title": "编写技术文档",
+          "description": "编写 RenderGraph 架构文档，包括设计理念、使用指南、API 参考和迁移指南。",
+          "status": "pending",
+          "files_to_create": [
+            "Source/Engine/Graphics/RenderGraph/README.md"
+          ],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "文档完整清晰"
+          },
+          "notes": "包含示例代码和最佳实践"
+        },
+        {
+          "id": "6.5",
+          "title": "集成测试和回归测试",
+          "description": "在各种场景和配置下测试完整的渲染管线，确保没有功能退化。",
+          "status": "pending",
+          "files_to_create": [],
+          "files_to_modify": [],
+          "verification": {
+            "type": "manual",
+            "run": "所有渲染特性正常工作，无视觉差异"
+          },
+          "notes": "测试不同平台和图形 API"
+        }
+      ]
+    }
+  ],
+  "executionPhase": "coding",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-05-02T05:35:34.301Z",
+  "tokenUsage": {
+    "promptTokens": 3888496,
+    "completionTokens": 27605,
+    "totalTokens": 3916101,
+    "stepsExecuted": 142,
+    "sessionId": "43618003-d063-4c2a-8845-a2753c2fe065"
+  },
+  "xstateState": "coding",
+  "lastEvent": {
+    "eventId": "001-refactor-rendering-pipeline-to-rendergraph-archite-CODING_STARTED-1777698745103",
+    "sequence": 1777698745103,
+    "type": "CODING_STARTED",
+    "timestamp": "2026-05-02T05:12:25.103Z"
+  },
+  "last_updated": "2026-05-02T05:33:47.551Z"
+}

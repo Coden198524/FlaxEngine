@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "RenderList.h"
 #include "RendererPass.h"
 #include "Engine/Content/Assets/Shader.h"
@@ -12,7 +13,7 @@
 /// <summary>
 /// Shadows rendering service.
 /// </summary>
-class ShadowsPass : public RendererPass<ShadowsPass>
+class ShadowsPass : public RendererPass<ShadowsPass>, public RenderGraphRasterPass
 {
 private:
     AssetReference<Shader> _shader;
@@ -27,7 +28,18 @@ private:
     PixelFormat _shadowMapFormat; // Cached on initialization
     bool _depthBounds = false;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _shadowMapAtlasRef;
+    RenderGraphTextureRef _staticShadowMapAtlasRef;
+    RenderGraphBufferRef _shadowsBufferRef;
+    RenderContext* _renderContext = nullptr;
+    RenderContextBatch* _renderContextBatch = nullptr;
+
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ShadowsPass"/> class.
+    /// </summary>
+    ShadowsPass();
     /// <summary>
     /// Setups the shadows rendering for batched scene drawing. Checks which lights will cast a shadow.
     /// </summary>
@@ -53,6 +65,10 @@ public:
     /// <param name="shadowMapAtlas">The output shadow map atlas texture or null if unused.</param>
     /// <param name="shadowsBuffer">The output shadows buffer or null if unused.</param>
     static void GetShadowAtlas(const RenderBuffers* renderBuffers, GPUTexture*& shadowMapAtlas, GPUBufferView*& shadowsBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
     static void SetupRenderContext(RenderContext& renderContext, RenderContext& shadowContext, struct ShadowAtlasLight* atlasLight = nullptr, RenderContext* dynamicContext = nullptr);

@@ -2,6 +2,7 @@
 
 #include "GBufferPass.h"
 #include "RenderList.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #if USE_EDITOR
 #include "Engine/Renderer/Editor/VertexColors.h"
 #include "Engine/Renderer/Editor/LightmapUVsDensity.h"
@@ -34,6 +35,11 @@ GPU_CB_STRUCT(GBufferPassData {
 Dictionary<GPUBuffer*, const ModelLOD*> GBufferPass::IndexBufferToModelLOD;
 CriticalSection GBufferPass::Locker;
 #endif
+
+GBufferPass::GBufferPass()
+    : RenderGraphRasterPass(TEXT("GBufferPass"))
+{
+}
 
 String GBufferPass::ToString() const
 {
@@ -557,4 +563,114 @@ void GBufferPass::DrawDecals(RenderContext& renderContext, GPUTextureView* light
     }
 
     context->ResetSR();
+}
+
+void GBufferPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare output resources
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+
+    // Create GBuffer textures
+    _lightBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("LightBuffer")));
+    _gbuffer0Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer0")));
+    _gbuffer1Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R10G10B10A2_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer1")));
+    _gbuffer2Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer2")));
+    _gbuffer3Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer3")));
+    _depthBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::D24_UNorm_S8_UInt, GPUTextureFlags::ShaderResource | GPUTextureFlags::DepthStencil, TEXT("DepthBuffer")));
+
+    // Declare outputs
+    SetRenderTarget(0, _lightBufferRef);
+    SetRenderTarget(1, _gbuffer0Ref);
+    SetRenderTarget(2, _gbuffer1Ref);
+    SetRenderTarget(3, _gbuffer2Ref);
+    SetRenderTarget(4, _gbuffer3Ref);
+    SetDepthStencil(_depthBufferRef, false);
+}
+
+void GBufferPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+
+    PROFILE_GPU_CPU("GBuffer");
+
+    // Get actual GPU textures
+    GPUTexture* lightBuffer = nullptr; // TODO: Get from builder
+    GPUTexture* depthBuffer = _renderContext->Buffers->DepthBuffer;
+    GPUTextureView* targetBuffers[5] =
+    {
+        lightBuffer ? lightBuffer->View() : nullptr,
+        _renderContext->Buffers->GBuffer0->View(),
+        _renderContext->Buffers->GBuffer1->View(),
+        _renderContext->Buffers->GBuffer2->View(),
+        _renderContext->Buffers->GBuffer3->View(),
+    };
+    _renderContext->View.Pass = DrawPass::GBuffer;
+    context->SetViewportAndScissors(_renderContext->Buffers->GetViewport());
+
+    // Clear GBuffer
+    {
+        PROFILE_GPU_CPU_NAMED("Clear");
+
+        context->ClearDepth(*depthBuffer);
+        if (lightBuffer)
+            context->Clear(lightBuffer->View(), Color::Transparent);
+        context->Clear(_renderContext->Buffers->GBuffer0->View(), Color::Transparent);
+        context->Clear(_renderContext->Buffers->GBuffer1->View(), Color::Transparent);
+        context->Clear(_renderContext->Buffers->GBuffer2->View(), Color(1, 0, 0, 0));
+        context->Clear(_renderContext->Buffers->GBuffer3->View(), Color::Transparent);
+    }
+
+    // Ensure to have valid data
+    if (checkIfSkipPass())
+    {
+        return;
+    }
+
+#if USE_EDITOR
+    // Special debug drawing
+    if (_renderContext->View.Mode == ViewMode::MaterialComplexity)
+    {
+        if (_renderContext->List->Sky && lightBuffer)
+        {
+            _renderContext->List->Sky->ApplySky(context, *_renderContext, Matrix::Identity);
+            GPUPipelineState* materialPs = context->GetState();
+            const float complexity = (float)Math::Min(materialPs->Complexity, MATERIAL_COMPLEXITY_LIMIT) / MATERIAL_COMPLEXITY_LIMIT;
+            context->Clear(lightBuffer->View(), Color(complexity, complexity, complexity, 1.0f));
+            _renderContext->List->Sky = nullptr;
+        }
+    }
+    else if (_renderContext->View.Mode == ViewMode::PhysicsColliders)
+    {
+        context->ResetRenderTarget();
+        return;
+    }
+#endif
+
+    // Draw objects that can get decals
+    context->SetRenderTarget(*depthBuffer, ToSpan(targetBuffers, ARRAY_COUNT(targetBuffers)));
+    _renderContext->List->ExecuteDrawCalls(*_renderContext, DrawCallsListType::GBuffer);
+
+    // Draw decals
+    if (lightBuffer)
+        DrawDecals(*_renderContext, lightBuffer->View());
+
+    // Draw objects that cannot get decals
+    context->SetRenderTarget(*depthBuffer, ToSpan(targetBuffers, ARRAY_COUNT(targetBuffers)));
+    _renderContext->List->ExecuteDrawCalls(*_renderContext, DrawCallsListType::GBufferNoDecals);
+
+    GPUTexture* nullTexture = nullptr;
+    if (lightBuffer)
+        _renderContext->List->RunCustomPostFxPass(context, *_renderContext, PostProcessEffectLocation::AfterGBufferPass, lightBuffer, nullTexture);
+
+    // Draw sky
+    if (_renderContext->List->Sky && _skyModel && _skyModel->CanBeRendered() && EnumHasAnyFlags(_renderContext->View.Flags, ViewFlags::Sky))
+    {
+        PROFILE_GPU_CPU_NAMED("Sky");
+        context->SetRenderTarget(*depthBuffer, ToSpan(targetBuffers, ARRAY_COUNT(targetBuffers)));
+        DrawSky(*_renderContext, context);
+    }
+
+    context->ResetRenderTarget();
 }

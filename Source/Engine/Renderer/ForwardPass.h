@@ -3,18 +3,26 @@
 #pragma once
 
 #include "Engine/Graphics/RenderView.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "RendererPass.h"
 #include "Engine/Content/Assets/Shader.h"
 
 /// <summary>
 /// Forward rendering pass for transparent geometry.
 /// </summary>
-class ForwardPass : public RendererPass<ForwardPass>
+class ForwardPass : public RendererPass<ForwardPass>, public RenderGraphRasterPass
 {
 private:
 
     AssetReference<Shader> _shader;
     GPUPipelineState* _psApplyDistortion;
+
+    // RenderGraph resources
+    RenderGraphTextureRef _inputRef;
+    RenderGraphTextureRef _outputRef;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _distortionRef;
+    RenderContext* _renderContext = nullptr;
 
 public:
 
@@ -32,6 +40,10 @@ public:
     /// <param name="input">Target with renderer frame ready for further processing.</param>
     /// <param name="output">The output frame.</param>
     void Render(RenderContext& renderContext, GPUTexture*& input, GPUTexture*& output);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 
