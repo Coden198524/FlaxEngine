@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 // Config
 #define SSAO_DEPTH_MIP_LEVELS 4 // <- must match shader define
@@ -15,7 +16,7 @@
 /// Screen Space Ambient Occlusion rendering service
 /// Current implementation is based on ASSAO: https://github.com/GameTechDev/ASSAO
 /// </summary>
-class AmbientOcclusionPass : public RendererPass<AmbientOcclusionPass>
+class AmbientOcclusionPass : public RendererPass<AmbientOcclusionPass>, public RenderGraphComputePass
 {
 private:
 
@@ -93,6 +94,12 @@ private:
     ASSAO_Settings settings;
     bool _depthBounds;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _normalBufferRef;
+    RenderGraphTextureRef _aoOutputRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
 
     /// <summary>
@@ -107,6 +114,10 @@ public:
     /// </summary>
     /// <param name="renderContext">The rendering context.</param>
     void Render(RenderContext& renderContext);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 

@@ -2,6 +2,7 @@
 
 #include "DepthOfFieldPass.h"
 #include "RenderList.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Content.h"
 #include "Engine/Graphics/Textures/GPUTexture.h"
@@ -42,6 +43,7 @@ GPU_CB_STRUCT(Data {
     });
 
 DepthOfFieldPass::DepthOfFieldPass()
+    : RenderGraphComputePass(TEXT("DepthOfFieldPass"))
 {
 }
 
@@ -423,3 +425,32 @@ void DepthOfFieldPass::Render(RenderContext& renderContext, GPUTexture*& frame, 
 
     RenderTargetPool::Release(depthBlurTarget);
 }
+
+void DepthOfFieldPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare input dependencies: depth buffer
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    
+    // Declare read
+    ReadTexture(_depthBufferRef);
+    
+    // Create output frame texture
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+    _outputFrameRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget | GPUTextureFlags::UnorderedAccess, TEXT("DOF_Output")));
+    
+    // Declare write
+    WriteTexture(_outputFrameRef);
+}
+
+void DepthOfFieldPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    // Execute the existing Render logic
+    GPUTexture* frame = _renderContext->Buffers->GBuffer0;
+    GPUTexture* tmp = nullptr;
+    Render(*_renderContext, frame, tmp);
+}
+

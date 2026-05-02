@@ -3,11 +3,12 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 /// <summary>
 /// Anti aliasing rendering service
 /// </summary>
-class MotionBlurPass : public RendererPass<MotionBlurPass>
+class MotionBlurPass : public RendererPass<MotionBlurPass>, public RenderGraphComputePass
 {
 private:
 
@@ -19,6 +20,13 @@ private:
     GPUPipelineState* _psTileMaxVariable = nullptr;
     GPUPipelineState* _psNeighborMax = nullptr;
     GPUPipelineState* _psMotionBlur = nullptr;
+
+    // RenderGraph resources
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _velocityBufferRef;
+    RenderGraphTextureRef _inputFrameRef;
+    RenderGraphTextureRef _outputFrameRef;
+    RenderContext* _renderContext = nullptr;
 
 public:
 
@@ -49,6 +57,10 @@ public:
     /// <param name="frame">Input and output frame (leave unchanged when not using this effect).</param>
     /// <param name="tmp">Temporary frame (the same format as frame)</param>
     void Render(RenderContext& renderContext, GPUTexture*& frame, GPUTexture*& tmp);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 

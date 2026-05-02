@@ -3,12 +3,13 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Graphics/PostProcessSettings.h"
 
 /// <summary>
 /// Depth of Field rendering
 /// </summary>
-class DepthOfFieldPass : public RendererPass<DepthOfFieldPass>
+class DepthOfFieldPass : public RendererPass<DepthOfFieldPass>, public RenderGraphComputePass
 {
 private:
     // Structure used for outputting bokeh points to an AppendStructuredBuffer
@@ -34,6 +35,12 @@ private:
     AssetReference<Texture> _defaultBokehCircle;
     AssetReference<Texture> _defaultBokehCross;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _inputFrameRef;
+    RenderGraphTextureRef _outputFrameRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
     DepthOfFieldPass();
 
@@ -45,6 +52,10 @@ public:
     /// <param name="frame">Input and output frame (leave unchanged when not using this effect).</param>
     /// <param name="tmp">Temporary frame (the same format as frame)</param>
     void Render(RenderContext& renderContext, GPUTexture*& frame, GPUTexture*& tmp);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
     GPUTexture* getDofBokehShape(DepthOfFieldSettings& dofSettings);
