@@ -11,6 +11,7 @@
 class RenderGraph;
 class RenderGraphPass;
 class RenderGraphCompiler;
+class StringBuilder;
 
 /// <summary>
 /// Render graph debugging and profiling utilities.
@@ -223,7 +224,7 @@ private:
     /// <param name="output">The output string.</param>
     /// <param name="pass">The pass.</param>
     /// <param name="passIndex">The pass index.</param>
-    void WriteDotNode(String& output, RenderGraphPass* pass, int32 passIndex);
+    void WriteDotNode(StringBuilder& output, RenderGraphPass* pass, int32 passIndex);
 
     /// <summary>
     /// Writes a DOT edge for a resource dependency.
@@ -232,7 +233,7 @@ private:
     /// <param name="fromPass">The source pass index.</param>
     /// <param name="toPass">The destination pass index.</param>
     /// <param name="resourceName">The resource name.</param>
-    void WriteDotEdge(String& output, int32 fromPass, int32 toPass, const String& resourceName);
+    void WriteDotEdge(StringBuilder& output, int32 fromPass, int32 toPass, const String& resourceName);
 
     /// <summary>
     /// Gets a color for a pass type in DOT format.

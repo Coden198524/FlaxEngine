@@ -26,6 +26,8 @@ private:
 
 public:
 
+    EyeAdaptationPass();
+
     /// <summary>
     /// Performs the eye adaptation effect.
     /// </summary>

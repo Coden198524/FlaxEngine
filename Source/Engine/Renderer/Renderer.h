@@ -8,6 +8,7 @@ class GPUContext;
 class GPUTexture;
 class GPUTextureView;
 struct RenderContext;
+struct RenderContextBatch;
 class RenderTask;
 class SceneRenderTask;
 class MaterialBase;

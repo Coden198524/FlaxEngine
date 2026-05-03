@@ -539,8 +539,13 @@ int32 Editor::LoadProduct()
     if (!FileSystem::DirectoryExists(lastProjectPath))
         lastProjectPath = String::Empty;
 
-    // Try to open the last project when requested
-    if (projectPath.IsEmpty() && CommandLine::Options.LastProject.IsTrue() && !lastProjectPath.IsEmpty())
+    // Try to open the last project by default when no project creation or generation mode is requested.
+    const bool canOpenLastProject =
+            projectPath.IsEmpty() &&
+            !CommandLine::Options.NewProject.IsTrue() &&
+            !CommandLine::Options.GenProjectFiles.IsTrue() &&
+            (CommandLine::Options.LastProject.IsTrue() || !CommandLine::Options.Headless.IsTrue());
+    if (canOpenLastProject && !lastProjectPath.IsEmpty())
         projectPath = lastProjectPath;
 
     // Missing project case

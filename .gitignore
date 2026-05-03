@@ -156,3 +156,7 @@ obj/
 .idea/
 *.code-workspace
 omnisharp.json
+
+# Autocode data directory
+.autocode/
+.auto-claude/

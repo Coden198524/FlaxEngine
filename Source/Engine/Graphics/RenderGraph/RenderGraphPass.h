@@ -2,13 +2,14 @@
 
 #pragma once
 
-#include "RenderGraphTypes.h"
+#include "RenderGraphBuilder.h"
 #include "Engine/Core/Types/String.h"
 #include "Engine/Core/Collections/Array.h"
 
 // Forward declarations
 class RenderGraph;
 class RenderGraphBuilder;
+class RenderGraphDebug;
 class GPUContext;
 
 /// <summary>
@@ -19,6 +20,7 @@ class FLAXENGINE_API RenderGraphPass
     friend class RenderGraph;
     friend class RenderGraphBuilder;
     friend class RenderGraphCompiler;
+    friend class RenderGraphDebug;
     friend class RenderGraphExecutor;
 
 protected:
@@ -63,6 +65,14 @@ protected:
     int32 _passIndex;
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphPass"/> class.
+    /// </summary>
+    RenderGraphPass()
+        : RenderGraphPass(String::Empty)
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphPass"/> class.
     /// </summary>
@@ -215,6 +225,14 @@ public:
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphRasterPass"/> class.
     /// </summary>
+    RenderGraphRasterPass()
+        : RenderGraphRasterPass(String::Empty)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphRasterPass"/> class.
+    /// </summary>
     /// <param name="name">The pass name.</param>
     RenderGraphRasterPass(const String& name)
         : RenderGraphPass(name, RenderGraphPassFlags::Raster)
@@ -259,6 +277,14 @@ public:
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphComputePass"/> class.
     /// </summary>
+    RenderGraphComputePass()
+        : RenderGraphComputePass(String::Empty)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphComputePass"/> class.
+    /// </summary>
     /// <param name="name">The pass name.</param>
     RenderGraphComputePass(const String& name)
         : RenderGraphPass(name, RenderGraphPassFlags::Compute)
@@ -272,6 +298,14 @@ public:
 class FLAXENGINE_API RenderGraphCopyPass : public RenderGraphPass
 {
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphCopyPass"/> class.
+    /// </summary>
+    RenderGraphCopyPass()
+        : RenderGraphCopyPass(String::Empty)
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphCopyPass"/> class.
     /// </summary>

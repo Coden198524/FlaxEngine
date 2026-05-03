@@ -16,6 +16,8 @@ class RenderGraphResourceManager;
 class GPUContext;
 class GPUTexture;
 class GPUBuffer;
+struct RenderContext;
+struct RenderContextBatch;
 
 /// <summary>
 /// Render graph that manages rendering passes and resources.
@@ -101,14 +103,34 @@ private:
     Array<RenderGraphPass*> _passes;
 
     /// <summary>
+    /// Whether graph owns each pass object.
+    /// </summary>
+    Array<bool> _ownsPasses;
+
+    /// <summary>
+    /// Whether each pass should be kept even if graph culling finds no exported output.
+    /// </summary>
+    Array<bool> _neverCullPasses;
+
+    /// <summary>
     /// All texture resources in the graph.
     /// </summary>
     Array<TextureResource> _textures;
 
     /// <summary>
+    /// Texture lookup by debug/resource name.
+    /// </summary>
+    Dictionary<String, int32> _textureNameToIndex;
+
+    /// <summary>
     /// All buffer resources in the graph.
     /// </summary>
     Array<BufferResource> _buffers;
+
+    /// <summary>
+    /// Buffer lookup by debug/resource name.
+    /// </summary>
+    Dictionary<String, int32> _bufferNameToIndex;
 
     /// <summary>
     /// The compiler for graph optimization.
@@ -135,6 +157,21 @@ private:
     /// </summary>
     bool _building;
 
+    /// <summary>
+    /// Current rendering context used during setup and execution.
+    /// </summary>
+    RenderContext* _renderContext;
+
+    /// <summary>
+    /// Current render context batch used during setup and execution.
+    /// </summary>
+    RenderContextBatch* _renderContextBatch;
+
+    /// <summary>
+    /// Pass currently declaring dependencies.
+    /// </summary>
+    RenderGraphPass* _currentSetupPass;
+
 public:
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraph"/> class.
@@ -150,9 +187,16 @@ public:
     /// <summary>
     /// Adds a pass to the render graph.
     /// </summary>
-    /// <param name="pass">The pass to add (ownership is transferred to the graph).</param>
+    /// <param name="pass">The pass to add.</param>
+    /// <param name="owned">Whether graph owns the pass object.</param>
+    /// <param name="neverCull">Whether graph should keep the pass even if its outputs are not exported yet.</param>
     /// <returns>The pass index.</returns>
-    int32 AddPass(RenderGraphPass* pass);
+    int32 AddPass(RenderGraphPass* pass, bool owned = true, bool neverCull = false);
+
+    /// <summary>
+    /// Sets rendering context data for pass setup and execution.
+    /// </summary>
+    void SetContext(RenderContext* renderContext, RenderContextBatch* renderContextBatch);
 
     /// <summary>
     /// Compiles the render graph, performing optimization and dependency resolution.
@@ -279,13 +323,43 @@ public:
     GPUTexture* GetTexture(RenderGraphTextureRef handle) override;
 
     /// <summary>
+    /// Gets the actual GPU texture by resource name.
+    /// </summary>
+    GPUTexture* GetTexture(const String& name);
+
+    /// <summary>
     /// Gets the actual GPU buffer for a render graph buffer reference.
     /// </summary>
     /// <param name="handle">The buffer reference.</param>
     /// <returns>The GPU buffer.</returns>
     GPUBuffer* GetBuffer(RenderGraphBufferRef handle) override;
 
+    /// <summary>
+    /// Gets the actual GPU buffer by resource name.
+    /// </summary>
+    GPUBuffer* GetBuffer(const String& name);
+
+    RenderContext* GetRenderContext() const override;
+    RenderContextBatch* GetRenderContextBatch() const override;
+    RenderGraphTextureRef ReadTexture(const String& name, RenderGraphTextureAccess access) override;
+    RenderGraphTextureRef WriteTexture(const String& name, RenderGraphTextureAccess access) override;
+    RenderGraphTextureRef ReadWriteTexture(const String& name, RenderGraphTextureAccess access) override;
+    RenderGraphBufferRef ReadBuffer(const String& name, RenderGraphBufferAccess access) override;
+    RenderGraphBufferRef WriteBuffer(const String& name, RenderGraphBufferAccess access) override;
+    RenderGraphBufferRef ReadWriteBuffer(const String& name, RenderGraphBufferAccess access) override;
+    void Read(RenderGraphTextureRef texture) override;
+    void Write(RenderGraphTextureRef texture) override;
+    void Read(RenderGraphBufferRef buffer) override;
+    void Write(RenderGraphBufferRef buffer) override;
+
 private:
+    RenderGraphTextureRef FindTexture(const String& name) const;
+    RenderGraphBufferRef FindBuffer(const String& name) const;
+    RenderGraphTextureRef CreateNamedTexture(const String& name, RenderGraphTextureAccess access);
+    RenderGraphBufferRef CreateNamedBuffer(const String& name);
+    void RegisterTextureName(const String& name, int32 index);
+    void RegisterBufferName(const String& name, int32 index);
+
     /// <summary>
     /// Builds the dependency graph by calling Setup on all passes.
     /// </summary>

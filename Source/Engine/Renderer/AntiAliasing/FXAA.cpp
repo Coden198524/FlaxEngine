@@ -7,6 +7,7 @@
 #include "Engine/Graphics/GPUContext.h"
 #include "Engine/Graphics/Graphics.h"
 #include "Engine/Graphics/RenderTask.h"
+#include "Engine/Graphics/Textures/GPUTexture.h"
 
 GPU_CB_STRUCT(Data {
     Float4 ScreenSize;
@@ -87,6 +88,10 @@ void FXAA::Render(RenderContext& renderContext, GPUTexture* input, GPUTextureVie
 
 void FXAA::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_input)
+        return;
+
     // Import input texture
     _inputRef = builder.ImportTexture(TEXT("Input"), _input);
     
@@ -110,4 +115,3 @@ void FXAA::Execute(GPUContext* context)
     // Execute the existing Render logic
     Render(*_renderContext, _input, _output);
 }
-

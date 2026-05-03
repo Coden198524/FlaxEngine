@@ -44,11 +44,20 @@ bool RenderGraphExecutor::Execute(RenderGraph* graph, RenderGraphCompiler* compi
         if (previousPass)
             InsertSynchronization(context, previousPass, pass);
 
+        // Keep D3D-style APIs from carrying stale SRV/UAV/RT bindings across graph passes.
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+
         // Transition resources to required states
         TransitionResources(graph, pass, context);
 
         // Execute the pass
         ExecutePass(graph, pass, context);
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
 
         previousPass = pass;
     }
@@ -67,10 +76,10 @@ void RenderGraphExecutor::ExecutePass(RenderGraph* graph, RenderGraphPass* pass,
     if (!pass || !context)
         return;
 
-    PROFILE_CPU_NAMED(pass->GetName().Get());
+    PROFILE_CPU_NAMED("RenderGraph.Pass");
 
     // Begin GPU event for debugging
-    context->EventBegin(pass->GetName().Get());
+    context->EventBegin(pass->GetName().GetText());
 
     // Execute the pass
     pass->Execute(context);
@@ -93,7 +102,7 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
 
         GPUTexture* texture = graph->GetTexture(RenderGraphTextureRef(texIndex));
         if (texture)
-            TransitionTexture(context, texture, texIndex, GetRequiredState(RenderGraphResourceAccess::Read, true));
+            TransitionTexture(context, texture, texIndex, GetRequiredAccess(RenderGraphResourceAccess::Read, true, pass->IsCompute()));
     }
 
     // Transition textures that are written
@@ -107,7 +116,7 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
         if (texture)
         {
             // Determine state based on usage
-            GPUResourceState newState = GPUResourceState::RenderTarget;
+            GPUResourceAccess newAccess = GPUResourceAccess::RenderTarget;
             
             // Check if it's a depth-stencil texture
             const auto& texDesc = graph->_textures[texIndex].Desc.Desc;
@@ -115,15 +124,15 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
                 texDesc.Format == PixelFormat::D32_Float ||
                 texDesc.Format == PixelFormat::D16_UNorm)
             {
-                newState = GPUResourceState::DepthWrite;
+                newAccess = GPUResourceAccess::DepthWrite;
             }
             // Check if it's a UAV texture
             else if ((texDesc.Flags & GPUTextureFlags::UnorderedAccess) != GPUTextureFlags::None)
             {
-                newState = GPUResourceState::UnorderedAccess;
+                newAccess = GPUResourceAccess::UnorderedAccess;
             }
             
-            TransitionTexture(context, texture, texIndex, newState);
+            TransitionTexture(context, texture, texIndex, newAccess);
         }
     }
 
@@ -136,7 +145,7 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
 
         GPUBuffer* buffer = graph->GetBuffer(RenderGraphBufferRef(bufIndex));
         if (buffer)
-            TransitionBuffer(context, buffer, bufIndex, GetRequiredState(RenderGraphResourceAccess::Read, false));
+            TransitionBuffer(context, buffer, bufIndex, GetRequiredAccess(RenderGraphResourceAccess::Read, false, pass->IsCompute()));
     }
 
     // Transition buffers that are written
@@ -148,76 +157,76 @@ void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPas
 
         GPUBuffer* buffer = graph->GetBuffer(RenderGraphBufferRef(bufIndex));
         if (buffer)
-            TransitionBuffer(context, buffer, bufIndex, GPUResourceState::UnorderedAccess);
+            TransitionBuffer(context, buffer, bufIndex, GPUResourceAccess::UnorderedAccess);
     }
 }
 
-void RenderGraphExecutor::TransitionTexture(GPUContext* context, GPUTexture* texture, int32 textureIndex, GPUResourceState newState)
+void RenderGraphExecutor::TransitionTexture(GPUContext* context, GPUTexture* texture, int32 textureIndex, GPUResourceAccess newAccess)
 {
     if (!texture || !context)
         return;
 
-    // Get current state
+    // Get current access
     ResourceState* currentState = _textureStates.TryGet(textureIndex);
-    GPUResourceState oldState = currentState ? currentState->State : GPUResourceState::Common;
+    GPUResourceAccess oldAccess = currentState ? currentState->Access : GPUResourceAccess::None;
 
-    // Skip if already in correct state
-    if (oldState == newState)
+    // Skip if already in correct access
+    if (oldAccess == newAccess)
         return;
 
     // Perform transition
-    context->SetResourceState(texture, oldState, newState);
+    context->Transition(texture, newAccess);
 
-    // Update tracked state
+    // Update tracked access
     if (currentState)
     {
-        currentState->State = newState;
+        currentState->Access = newAccess;
     }
     else
     {
-        _textureStates.Add(textureIndex, ResourceState(newState));
+        _textureStates.Add(textureIndex, ResourceState(newAccess));
     }
 }
 
-void RenderGraphExecutor::TransitionBuffer(GPUContext* context, GPUBuffer* buffer, int32 bufferIndex, GPUResourceState newState)
+void RenderGraphExecutor::TransitionBuffer(GPUContext* context, GPUBuffer* buffer, int32 bufferIndex, GPUResourceAccess newAccess)
 {
     if (!buffer || !context)
         return;
 
-    // Get current state
+    // Get current access
     ResourceState* currentState = _bufferStates.TryGet(bufferIndex);
-    GPUResourceState oldState = currentState ? currentState->State : GPUResourceState::Common;
+    GPUResourceAccess oldAccess = currentState ? currentState->Access : GPUResourceAccess::None;
 
-    // Skip if already in correct state
-    if (oldState == newState)
+    // Skip if already in correct access
+    if (oldAccess == newAccess)
         return;
 
     // Perform transition
-    context->SetResourceState(buffer, oldState, newState);
+    context->Transition(buffer, newAccess);
 
-    // Update tracked state
+    // Update tracked access
     if (currentState)
     {
-        currentState->State = newState;
+        currentState->Access = newAccess;
     }
     else
     {
-        _bufferStates.Add(bufferIndex, ResourceState(newState));
+        _bufferStates.Add(bufferIndex, ResourceState(newAccess));
     }
 }
 
-GPUResourceState RenderGraphExecutor::GetRequiredState(RenderGraphResourceAccess access, bool isTexture) const
+GPUResourceAccess RenderGraphExecutor::GetRequiredAccess(RenderGraphResourceAccess access, bool isTexture, bool isCompute) const
 {
     switch (access)
     {
     case RenderGraphResourceAccess::Read:
-        return GPUResourceState::ShaderResource;
+        return isCompute ? GPUResourceAccess::ShaderReadCompute : GPUResourceAccess::ShaderReadGraphics;
     case RenderGraphResourceAccess::Write:
-        return isTexture ? GPUResourceState::RenderTarget : GPUResourceState::UnorderedAccess;
+        return isTexture ? GPUResourceAccess::RenderTarget : GPUResourceAccess::UnorderedAccess;
     case RenderGraphResourceAccess::ReadWrite:
-        return GPUResourceState::UnorderedAccess;
+        return GPUResourceAccess::UnorderedAccess;
     default:
-        return GPUResourceState::Common;
+        return GPUResourceAccess::None;
     }
 }
 

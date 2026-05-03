@@ -1,6 +1,7 @@
 // Copyright (c) Wojciech Figat. All rights reserved.
 
 #include "PostProcessingPass.h"
+#include "ColorGradingPass.h"
 #include "RenderList.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Content.h"
@@ -70,6 +71,11 @@ GPU_CB_STRUCT(GaussianBlurData{
     float Dummy4;
     Float4 GaussianBlurCache[GB_KERNEL_SIZE]; // x-weight, y-offset
     });
+
+PostProcessingPass::PostProcessingPass()
+    : RenderGraphRasterPass(TEXT("PostProcessingPass"))
+{
+}
 
 String PostProcessingPass::ToString() const
 {
@@ -255,8 +261,7 @@ void PostProcessingPass::Setup(RenderGraphBuilder& builder)
     
     // Declare input resources
     _inputRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
-    _colorGradingLUTRef = builder.ReadTexture("ColorGradingLUT", RenderGraphTextureAccess::SRV);
-    
+
     // Declare output resource
     _outputRef = builder.WriteTexture("OutputFrame", RenderGraphTextureAccess::RTV);
 }
@@ -274,7 +279,7 @@ void PostProcessingPass::Execute(GPUContext* context)
     // Get actual GPU textures from RenderGraph references
     GPUTexture* input = _inputRef.GetTexture();
     GPUTexture* output = _outputRef.GetTexture();
-    GPUTexture* colorGradingLUT = _colorGradingLUTRef.IsValid() ? _colorGradingLUTRef.GetTexture() : nullptr;
+    GPUTexture* colorGradingLUT = ColorGradingPass::Instance()->RenderLUT(renderContext);
     
     if (!input || !output)
         return;

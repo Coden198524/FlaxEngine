@@ -153,6 +153,11 @@ namespace PreIntegratedGF
 
 class Model;
 
+ReflectionsPass::ReflectionsPass()
+    : RenderGraphRasterPass(TEXT("ReflectionsPass"))
+{
+}
+
 String ReflectionsPass::ToString() const
 {
     return TEXT("ReflectionsPass");
@@ -440,18 +445,25 @@ void ReflectionsPass::Render(RenderContext& renderContext, GPUTextureView* light
 
 void ReflectionsPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
     // Declare input dependencies: GBuffer and depth
-    _lightBufferRef = builder.ImportTexture(TEXT("LightBuffer"), _renderContext->Buffers->GBuffer0);
-    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), _renderContext->Buffers->GBuffer0);
-    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
-    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), _renderContext->Buffers->GBuffer2);
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
+    _gbuffer0Ref = builder.ReadTexture("GBuffer0", RenderGraphTextureAccess::SRV);
+    _gbuffer1Ref = builder.ReadTexture("GBuffer1", RenderGraphTextureAccess::SRV);
+    _gbuffer2Ref = builder.ReadTexture("GBuffer2", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    if (_renderContext->List->Settings.ScreenSpaceReflections.TemporalEffect && _renderContext->List->Setup.UseMotionVectors)
+        _motionVectorsRef = builder.ReadTexture("MotionVectors", RenderGraphTextureAccess::SRV);
     
     // Declare reads
     ReadTexture(_gbuffer0Ref);
     ReadTexture(_gbuffer1Ref);
     ReadTexture(_gbuffer2Ref);
     ReadTexture(_depthBufferRef);
+    ReadTexture(_motionVectorsRef);
     
     // Create reflection output texture
     const int32 width = _renderContext->Buffers->GetWidth();
@@ -469,6 +481,6 @@ void ReflectionsPass::Execute(GPUContext* context)
         return;
     
     // Execute the existing Render logic
-    Render(*_renderContext, _renderContext->Buffers->GBuffer0->View());
+    GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+    Render(*_renderContext, lightBuffer ? lightBuffer->View() : nullptr);
 }
-

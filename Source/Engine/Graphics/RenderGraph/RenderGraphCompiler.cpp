@@ -67,7 +67,7 @@ void RenderGraphCompiler::CullPasses(RenderGraph* graph)
             continue;
             
         // Check if pass cannot be culled
-        if (!pass->CanCull())
+        if (!pass->CanCull() || (i < graph->_neverCullPasses.Count() && graph->_neverCullPasses[i]))
         {
             MarkPassAsUsed(graph, pass, usedPasses);
             continue;
@@ -139,7 +139,7 @@ void RenderGraphCompiler::MarkPassAsUsed(RenderGraph* graph, RenderGraphPass* pa
         {
             // Find the pass that produces this texture
             int32 producerPassIndex = graph->_textures[texIndex].ProducerPass;
-            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount() && producerPassIndex != pass->_passIndex)
             {
                 RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
                 MarkPassAsUsed(graph, producerPass, usedPasses);
@@ -155,7 +155,7 @@ void RenderGraphCompiler::MarkPassAsUsed(RenderGraph* graph, RenderGraphPass* pa
         {
             // Find the pass that produces this buffer
             int32 producerPassIndex = graph->_buffers[bufIndex].ProducerPass;
-            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount() && producerPassIndex != pass->_passIndex)
             {
                 RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
                 MarkPassAsUsed(graph, producerPass, usedPasses);
@@ -185,9 +185,6 @@ bool RenderGraphCompiler::DetermineExecutionOrder(RenderGraph* graph)
                 return false; // Cycle detected
         }
     }
-
-    // Reverse the list (DFS produces reverse topological order)
-    _sortedPasses.Reverse();
 
     return true;
 }
@@ -221,7 +218,7 @@ bool RenderGraphCompiler::TopologicalSortDFS(RenderGraph* graph, RenderGraphPass
         {
             // Find the pass that produces this texture
             int32 producerPassIndex = graph->_textures[texIndex].ProducerPass;
-            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount() && producerPassIndex != pass->_passIndex)
             {
                 RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
                 if (!TopologicalSortDFS(graph, producerPass, visited, recursionStack))
@@ -238,7 +235,7 @@ bool RenderGraphCompiler::TopologicalSortDFS(RenderGraph* graph, RenderGraphPass
         {
             // Find the pass that produces this buffer
             int32 producerPassIndex = graph->_buffers[bufIndex].ProducerPass;
-            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount())
+            if (producerPassIndex >= 0 && producerPassIndex < graph->GetPassCount() && producerPassIndex != pass->_passIndex)
             {
                 RenderGraphPass* producerPass = graph->GetPass(producerPassIndex);
                 if (!TopologicalSortDFS(graph, producerPass, visited, recursionStack))

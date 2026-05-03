@@ -9,6 +9,7 @@
 // Forward declarations
 class GPUTexture;
 class GPUBuffer;
+class RenderGraph;
 
 /// <summary>
 /// Render graph pass execution flags.
@@ -108,10 +109,16 @@ struct RenderGraphTextureRef
     int32 Index;
 
     /// <summary>
+    /// Owning render graph.
+    /// </summary>
+    RenderGraph* Graph;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphTextureRef"/> struct.
     /// </summary>
     RenderGraphTextureRef()
         : Index(-1)
+        , Graph(nullptr)
     {
     }
 
@@ -121,6 +128,18 @@ struct RenderGraphTextureRef
     /// <param name="index">The resource index.</param>
     explicit RenderGraphTextureRef(int32 index)
         : Index(index)
+        , Graph(nullptr)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphTextureRef"/> struct.
+    /// </summary>
+    /// <param name="graph">The owning render graph.</param>
+    /// <param name="index">The resource index.</param>
+    RenderGraphTextureRef(RenderGraph* graph, int32 index)
+        : Index(index)
+        , Graph(graph)
     {
     }
 
@@ -138,17 +157,20 @@ struct RenderGraphTextureRef
     FORCE_INLINE void Invalidate()
     {
         Index = -1;
+        Graph = nullptr;
     }
 
     FORCE_INLINE bool operator==(const RenderGraphTextureRef& other) const
     {
-        return Index == other.Index;
+        return Index == other.Index && Graph == other.Graph;
     }
 
     FORCE_INLINE bool operator!=(const RenderGraphTextureRef& other) const
     {
-        return Index != other.Index;
+        return Index != other.Index || Graph != other.Graph;
     }
+
+    GPUTexture* GetTexture() const;
 };
 
 /// <summary>
@@ -162,10 +184,16 @@ struct RenderGraphBufferRef
     int32 Index;
 
     /// <summary>
+    /// Owning render graph.
+    /// </summary>
+    RenderGraph* Graph;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraphBufferRef"/> struct.
     /// </summary>
     RenderGraphBufferRef()
         : Index(-1)
+        , Graph(nullptr)
     {
     }
 
@@ -175,6 +203,18 @@ struct RenderGraphBufferRef
     /// <param name="index">The resource index.</param>
     explicit RenderGraphBufferRef(int32 index)
         : Index(index)
+        , Graph(nullptr)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RenderGraphBufferRef"/> struct.
+    /// </summary>
+    /// <param name="graph">The owning render graph.</param>
+    /// <param name="index">The resource index.</param>
+    RenderGraphBufferRef(RenderGraph* graph, int32 index)
+        : Index(index)
+        , Graph(graph)
     {
     }
 
@@ -192,17 +232,20 @@ struct RenderGraphBufferRef
     FORCE_INLINE void Invalidate()
     {
         Index = -1;
+        Graph = nullptr;
     }
 
     FORCE_INLINE bool operator==(const RenderGraphBufferRef& other) const
     {
-        return Index == other.Index;
+        return Index == other.Index && Graph == other.Graph;
     }
 
     FORCE_INLINE bool operator!=(const RenderGraphBufferRef& other) const
     {
-        return Index != other.Index;
+        return Index != other.Index || Graph != other.Graph;
     }
+
+    GPUBuffer* GetBuffer() const;
 };
 
 /// <summary>

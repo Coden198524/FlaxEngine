@@ -8,8 +8,10 @@
 #include "Engine/Graphics/GPUContext.h"
 #include "Engine/Graphics/Textures/GPUTexture.h"
 #include "Engine/Graphics/GPUBuffer.h"
+#include "Engine/Graphics/RenderBuffers.h"
 #include "Engine/Core/Log.h"
 #include "Engine/Profiler/ProfilerCPU.h"
+#include "Engine/Renderer/RenderList.h"
 
 RenderGraph::RenderGraph()
     : _compiler(nullptr)
@@ -17,6 +19,9 @@ RenderGraph::RenderGraph()
     , _resourceManager(nullptr)
     , _compiled(false)
     , _building(false)
+    , _renderContext(nullptr)
+    , _renderContextBatch(nullptr)
+    , _currentSetupPass(nullptr)
 {
     _compiler = New<RenderGraphCompiler>();
     _executor = New<RenderGraphExecutor>();
@@ -46,7 +51,7 @@ RenderGraph::~RenderGraph()
     }
 }
 
-int32 RenderGraph::AddPass(RenderGraphPass* pass)
+int32 RenderGraph::AddPass(RenderGraphPass* pass, bool owned, bool neverCull)
 {
     if (!pass)
         return -1;
@@ -56,11 +61,19 @@ int32 RenderGraph::AddPass(RenderGraphPass* pass)
     
     // Add to pass list
     _passes.Add(pass);
+    _ownsPasses.Add(owned);
+    _neverCullPasses.Add(neverCull);
     
     // Mark as not compiled
     _compiled = false;
     
     return pass->_passIndex;
+}
+
+void RenderGraph::SetContext(RenderContext* renderContext, RenderContextBatch* renderContextBatch)
+{
+    _renderContext = renderContext;
+    _renderContextBatch = renderContextBatch;
 }
 
 bool RenderGraph::Compile()
@@ -134,13 +147,22 @@ void RenderGraph::Clear()
     for (int32 i = 0; i < _passes.Count(); i++)
     {
         if (_passes[i])
+        {
+            _passes[i]->_passIndex = -1;
+            _passes[i]->_culled = false;
+        }
+        if (_passes[i] && i < _ownsPasses.Count() && _ownsPasses[i])
             Delete(_passes[i]);
     }
     _passes.Clear();
+    _ownsPasses.Clear();
+    _neverCullPasses.Clear();
 
     // Clear resource lists
     _textures.Clear();
+    _textureNameToIndex.Clear();
     _buffers.Clear();
+    _bufferNameToIndex.Clear();
 
     // Clear compiler and executor state
     if (_compiler)
@@ -152,6 +174,9 @@ void RenderGraph::Clear()
 
     _compiled = false;
     _building = false;
+    _renderContext = nullptr;
+    _renderContextBatch = nullptr;
+    _currentSetupPass = nullptr;
 }
 
 RenderGraphTextureRef RenderGraph::CreateTexture(const RenderGraphTextureDesc& desc)
@@ -164,8 +189,9 @@ RenderGraphTextureRef RenderGraph::CreateTexture(const RenderGraphTextureDesc& d
 
     int32 index = _textures.Count();
     _textures.Add(resource);
+    RegisterTextureName(desc.Name, index);
 
-    return RenderGraphTextureRef(index);
+    return RenderGraphTextureRef(this, index);
 }
 
 RenderGraphTextureRef RenderGraph::ImportTexture(const String& name, GPUTexture* texture)
@@ -176,15 +202,16 @@ RenderGraphTextureRef RenderGraph::ImportTexture(const String& name, GPUTexture*
     TextureResource resource;
     resource.Desc.Name = name;
     resource.Desc.Desc = texture->GetDescription();
-    resource.Desc.Flags = RenderGraphResourceFlags::Imported;
+    resource.Desc.Flags = RenderGraphResourceFlags::Imported | RenderGraphResourceFlags::Exported;
     resource.Texture = texture;
     resource.ProducerPass = -1;
     resource.IsImported = true;
 
     int32 index = _textures.Count();
     _textures.Add(resource);
+    RegisterTextureName(name, index);
 
-    return RenderGraphTextureRef(index);
+    return RenderGraphTextureRef(this, index);
 }
 
 RenderGraphBufferRef RenderGraph::CreateBuffer(const RenderGraphBufferDesc& desc)
@@ -197,8 +224,9 @@ RenderGraphBufferRef RenderGraph::CreateBuffer(const RenderGraphBufferDesc& desc
 
     int32 index = _buffers.Count();
     _buffers.Add(resource);
+    RegisterBufferName(desc.Name, index);
 
-    return RenderGraphBufferRef(index);
+    return RenderGraphBufferRef(this, index);
 }
 
 RenderGraphBufferRef RenderGraph::ImportBuffer(const String& name, GPUBuffer* buffer)
@@ -209,31 +237,208 @@ RenderGraphBufferRef RenderGraph::ImportBuffer(const String& name, GPUBuffer* bu
     BufferResource resource;
     resource.Desc.Name = name;
     resource.Desc.Desc = buffer->GetDescription();
-    resource.Desc.Flags = RenderGraphResourceFlags::Imported;
+    resource.Desc.Flags = RenderGraphResourceFlags::Imported | RenderGraphResourceFlags::Exported;
     resource.Buffer = buffer;
     resource.ProducerPass = -1;
     resource.IsImported = true;
 
     int32 index = _buffers.Count();
     _buffers.Add(resource);
+    RegisterBufferName(name, index);
 
-    return RenderGraphBufferRef(index);
+    return RenderGraphBufferRef(this, index);
 }
 
 GPUTexture* RenderGraph::GetTexture(RenderGraphTextureRef handle)
 {
-    if (!handle.IsValid() || handle.Index >= _textures.Count())
+    if (!handle.IsValid() || handle.Index >= _textures.Count() || (handle.Graph && handle.Graph != this))
         return nullptr;
 
     return _textures[handle.Index].Texture;
 }
 
+GPUTexture* RenderGraph::GetTexture(const String& name)
+{
+    return GetTexture(FindTexture(name));
+}
+
 GPUBuffer* RenderGraph::GetBuffer(RenderGraphBufferRef handle)
 {
-    if (!handle.IsValid() || handle.Index >= _buffers.Count())
+    if (!handle.IsValid() || handle.Index >= _buffers.Count() || (handle.Graph && handle.Graph != this))
         return nullptr;
 
     return _buffers[handle.Index].Buffer;
+}
+
+GPUBuffer* RenderGraph::GetBuffer(const String& name)
+{
+    return GetBuffer(FindBuffer(name));
+}
+
+RenderContext* RenderGraph::GetRenderContext() const
+{
+    return _renderContext;
+}
+
+RenderContextBatch* RenderGraph::GetRenderContextBatch() const
+{
+    return _renderContextBatch;
+}
+
+RenderGraphTextureRef RenderGraph::ReadTexture(const String& name, RenderGraphTextureAccess access)
+{
+    auto result = FindTexture(name);
+    if (!result.IsValid())
+        result = CreateNamedTexture(name, access);
+    Read(result);
+    return result;
+}
+
+RenderGraphTextureRef RenderGraph::WriteTexture(const String& name, RenderGraphTextureAccess access)
+{
+    auto result = FindTexture(name);
+    if (!result.IsValid())
+        result = CreateNamedTexture(name, access);
+    Write(result);
+    return result;
+}
+
+RenderGraphTextureRef RenderGraph::ReadWriteTexture(const String& name, RenderGraphTextureAccess access)
+{
+    auto result = FindTexture(name);
+    if (!result.IsValid())
+        result = CreateNamedTexture(name, access);
+    Read(result);
+    Write(result);
+    return result;
+}
+
+RenderGraphBufferRef RenderGraph::ReadBuffer(const String& name, RenderGraphBufferAccess access)
+{
+    auto result = FindBuffer(name);
+    if (!result.IsValid())
+        result = CreateNamedBuffer(name);
+    Read(result);
+    return result;
+}
+
+RenderGraphBufferRef RenderGraph::WriteBuffer(const String& name, RenderGraphBufferAccess access)
+{
+    auto result = FindBuffer(name);
+    if (!result.IsValid())
+        result = CreateNamedBuffer(name);
+    Write(result);
+    return result;
+}
+
+RenderGraphBufferRef RenderGraph::ReadWriteBuffer(const String& name, RenderGraphBufferAccess access)
+{
+    auto result = FindBuffer(name);
+    if (!result.IsValid())
+        result = CreateNamedBuffer(name);
+    Read(result);
+    Write(result);
+    return result;
+}
+
+void RenderGraph::Read(RenderGraphTextureRef texture)
+{
+    if (_currentSetupPass && texture.IsValid())
+        _currentSetupPass->ReadTexture(texture);
+}
+
+void RenderGraph::Write(RenderGraphTextureRef texture)
+{
+    if (_currentSetupPass && texture.IsValid())
+        _currentSetupPass->WriteTexture(texture);
+}
+
+void RenderGraph::Read(RenderGraphBufferRef buffer)
+{
+    if (_currentSetupPass && buffer.IsValid())
+        _currentSetupPass->ReadBuffer(buffer);
+}
+
+void RenderGraph::Write(RenderGraphBufferRef buffer)
+{
+    if (_currentSetupPass && buffer.IsValid())
+        _currentSetupPass->WriteBuffer(buffer);
+}
+
+RenderGraphTextureRef RenderGraph::FindTexture(const String& name) const
+{
+    int32 index;
+    if (name.HasChars() && _textureNameToIndex.TryGet(name, index) && index >= 0 && index < _textures.Count())
+        return RenderGraphTextureRef(const_cast<RenderGraph*>(this), index);
+    return RenderGraphTextureRef();
+}
+
+RenderGraphBufferRef RenderGraph::FindBuffer(const String& name) const
+{
+    int32 index;
+    if (name.HasChars() && _bufferNameToIndex.TryGet(name, index) && index >= 0 && index < _buffers.Count())
+        return RenderGraphBufferRef(const_cast<RenderGraph*>(this), index);
+    return RenderGraphBufferRef();
+}
+
+RenderGraphTextureRef RenderGraph::CreateNamedTexture(const String& name, RenderGraphTextureAccess access)
+{
+    if (!_renderContext || !_renderContext->Buffers || !name.HasChars())
+        return RenderGraphTextureRef();
+
+    auto buffers = _renderContext->Buffers;
+    if (name == TEXT("GBuffer0") && buffers->GBuffer0)
+        return ImportTexture(name, buffers->GBuffer0);
+    if (name == TEXT("GBuffer1") && buffers->GBuffer1)
+        return ImportTexture(name, buffers->GBuffer1);
+    if (name == TEXT("GBuffer2") && buffers->GBuffer2)
+        return ImportTexture(name, buffers->GBuffer2);
+    if (name == TEXT("GBuffer3") && buffers->GBuffer3)
+        return ImportTexture(name, buffers->GBuffer3);
+    if (name == TEXT("DepthBuffer") && buffers->DepthBuffer)
+        return ImportTexture(name, buffers->DepthBuffer);
+    if (name == TEXT("MotionVectors") && buffers->MotionVectors)
+        return ImportTexture(name, buffers->MotionVectors);
+    if ((name == TEXT("InputFrame") || name == TEXT("ColorBuffer")) && buffers->GBuffer0)
+        return ImportTexture(name, buffers->GBuffer0);
+
+    auto flags = GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget;
+    if (access == RenderGraphTextureAccess::UAV)
+        flags |= GPUTextureFlags::UnorderedAccess;
+    RenderGraphTextureDesc desc = RenderGraphTextureDesc::Create2D(buffers->GetWidth(), buffers->GetHeight(), buffers->GetOutputFormat(), flags, name);
+    if (name == TEXT("OutputFrame"))
+        desc.Flags |= RenderGraphResourceFlags::Exported;
+    return CreateTexture(desc);
+}
+
+RenderGraphBufferRef RenderGraph::CreateNamedBuffer(const String& name)
+{
+    if (!name.HasChars())
+        return RenderGraphBufferRef();
+    LOG(Warning, "RenderGraph: missing named buffer '{0}'", name);
+    return RenderGraphBufferRef();
+}
+
+void RenderGraph::RegisterTextureName(const String& name, int32 index)
+{
+    if (name.HasChars())
+        _textureNameToIndex[name] = index;
+}
+
+void RenderGraph::RegisterBufferName(const String& name, int32 index)
+{
+    if (name.HasChars())
+        _bufferNameToIndex[name] = index;
+}
+
+GPUTexture* RenderGraphTextureRef::GetTexture() const
+{
+    return Graph ? Graph->GetTexture(*this) : nullptr;
+}
+
+GPUBuffer* RenderGraphBufferRef::GetBuffer() const
+{
+    return Graph ? Graph->GetBuffer(*this) : nullptr;
 }
 
 void RenderGraph::BuildDependencies()
@@ -255,7 +460,9 @@ void RenderGraph::BuildDependencies()
         pass->_culled = false;
 
         // Call Setup to declare dependencies
+        _currentSetupPass = pass;
         pass->Setup(*this);
+        _currentSetupPass = nullptr;
     }
 
     // Determine producer passes for each resource

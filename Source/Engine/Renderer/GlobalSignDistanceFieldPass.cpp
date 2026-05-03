@@ -596,6 +596,11 @@ String GlobalSignDistanceFieldPass::ToString() const
     return TEXT("GlobalSignDistanceFieldPass");
 }
 
+GlobalSignDistanceFieldPass::GlobalSignDistanceFieldPass()
+    : RenderGraphComputePass(TEXT("GlobalSignDistanceFieldPass"))
+{
+}
+
 bool GlobalSignDistanceFieldPass::Init()
 {
     // Check platform support
@@ -1231,14 +1236,14 @@ void GlobalSignDistanceFieldPass::RasterizeHeightfield(Actor* actor, GPUTexture*
 
 void GlobalSignDistanceFieldPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare output resources (3D volume textures for SDF cascades)
-    builder.WriteTexture("GlobalSDF", RenderGraphTextureAccess::UAV);
-    builder.WriteTexture("GlobalSDFMip", RenderGraphTextureAccess::UAV);
+    _renderContext = builder.GetRenderContext();
 }
 
 void GlobalSignDistanceFieldPass::Execute(GPUContext* context)
 {
-    // Execute method is called by RenderGraph during execution phase
-    // The actual rendering logic is handled by the Render method which is called
-    // from the main rendering pipeline with proper RenderContext
+    if (!_renderContext)
+        return;
+
+    BindingData bindingData;
+    Render(*_renderContext, context, bindingData);
 }

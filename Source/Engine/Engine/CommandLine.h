@@ -128,6 +128,16 @@ public:
         /// </summary>
         Nullable<bool> LowDPI;
 
+        /// <summary>
+        /// -rendergraph (enables RenderGraph renderer path)
+        /// </summary>
+        Nullable<bool> RenderGraph;
+
+        /// <summary>
+        /// -norendergraph (disables RenderGraph renderer path)
+        /// </summary>
+        Nullable<bool> NoRenderGraph;
+
 #if PLATFORM_LINUX && PLATFORM_SDL
 
         /// <summary>

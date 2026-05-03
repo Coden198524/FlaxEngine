@@ -3,7 +3,7 @@
 #pragma once
 
 #include "../RendererPass.h"
-#include "../RenderGraph.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Core/Math/Int4.h"
 #include "Engine/Graphics/Textures/GPUTexture.h"
 
@@ -50,12 +50,19 @@ private:
     GPUShaderProgramCS* _csUpdateProbesIrradiance;
     GPUShaderProgramCS* _csUpdateProbesDistance;
     GPUPipelineState* _psIndirectLighting[2] = {};
+    RenderGraphTextureRef _lightBufferRef;
+    RenderContext* _renderContext = nullptr;
 #if USE_EDITOR
     AssetReference<Model> _debugModel;
     AssetReference<MaterialBase> _debugMaterial;
 #endif
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DynamicDiffuseGlobalIlluminationPass"/> class.
+    /// </summary>
+    DynamicDiffuseGlobalIlluminationPass();
+
     /// <summary>
     /// Gets the DDGI binding data (only if enabled).
     /// </summary>

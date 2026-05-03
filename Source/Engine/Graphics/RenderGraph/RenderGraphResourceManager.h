@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "RenderGraphCompiler.h"
 #include "RenderGraphTypes.h"
 #include "Engine/Core/Collections/Array.h"
 #include "Engine/Core/Collections/Dictionary.h"
@@ -10,7 +11,6 @@
 
 // Forward declarations
 class RenderGraph;
-class RenderGraphCompiler;
 class GPUTexture;
 class GPUBuffer;
 

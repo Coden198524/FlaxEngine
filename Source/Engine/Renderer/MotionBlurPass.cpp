@@ -385,22 +385,26 @@ void MotionBlurPass::Render(RenderContext& renderContext, GPUTexture*& frame, GP
 
 void MotionBlurPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare input dependencies: depth, velocity buffers, and input frame
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
-    _velocityBufferRef = builder.ImportTexture(TEXT("MotionVectors"), _renderContext->Buffers->MotionVectors);
-    _inputFrameRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0);
-    
-    // Declare reads
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
+    _inputFrameRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    _velocityBufferRef = builder.ReadTexture("MotionVectors", RenderGraphTextureAccess::SRV);
+
+    GPUTexture* input = _inputFrameRef.GetTexture();
+    const int32 width = input ? input->Width() : _renderContext->Buffers->GetWidth();
+    const int32 height = input ? input->Height() : _renderContext->Buffers->GetHeight();
+    const PixelFormat format = input ? input->Format() : _renderContext->Buffers->GetOutputFormat();
+
+    RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(width, height, format, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("InputFrame"));
+    outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+    _outputFrameRef = builder.CreateTexture(outputDesc);
+
     ReadTexture(_depthBufferRef);
     ReadTexture(_velocityBufferRef);
     ReadTexture(_inputFrameRef);
-    
-    // Create output frame texture
-    const int32 width = _renderContext->Buffers->GetWidth();
-    const int32 height = _renderContext->Buffers->GetHeight();
-    _outputFrameRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("MotionBlur_Output")));
-    
-    // Declare write
     WriteTexture(_outputFrameRef);
 }
 
@@ -408,10 +412,38 @@ void MotionBlurPass::Execute(GPUContext* context)
 {
     if (!_renderContext)
         return;
-    
-    // Execute the existing Render logic
-    GPUTexture* frame = _renderContext->Buffers->GBuffer0;
-    GPUTexture* tmp = nullptr;
-    Render(*_renderContext, frame, tmp);
-}
 
+    GPUTexture* input = _inputFrameRef.GetTexture();
+    GPUTexture* output = _outputFrameRef.GetTexture();
+    if (!input || !output)
+        return;
+
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
+    context->SetRenderTarget(*output);
+    context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+    context->Draw(input);
+    context->ResetRenderTarget();
+    context->ResetSR();
+
+    GPUTexture* tmp = RenderTargetPool::Get(output->GetDescription());
+    RENDER_TARGET_POOL_SET_NAME(tmp, "RenderGraph.MotionBlur.Temp");
+    GPUTexture* frame = output;
+    Render(*_renderContext, frame, tmp);
+
+    if (frame && frame != output)
+    {
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+        context->SetRenderTarget(*output);
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        context->Draw(frame);
+    }
+
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
+    RenderTargetPool::Release(tmp);
+}

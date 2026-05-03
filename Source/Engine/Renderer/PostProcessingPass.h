@@ -27,10 +27,12 @@ private:
     // RenderGraph resources
     RenderGraphTextureRef _inputRef;
     RenderGraphTextureRef _outputRef;
-    RenderGraphTextureRef _colorGradingLUTRef;
     RenderContext* _renderContext = nullptr;
 
 public:
+
+    PostProcessingPass();
+
     /// <summary>
     /// Perform postFx rendering for the input task
     /// </summary>

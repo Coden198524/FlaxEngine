@@ -33,6 +33,12 @@ GPU_CB_STRUCT(EyeAdaptationData {
     float Dummy1;
     });
 
+EyeAdaptationPass::EyeAdaptationPass()
+    : RenderGraphComputePass(TEXT("EyeAdaptationPass"))
+    , _canUseHistogram(false)
+{
+}
+
 void EyeAdaptationPass::Render(RenderContext& renderContext, GPUTexture* colorBuffer)
 {
     auto device = GPUDevice::Instance;
@@ -304,8 +310,8 @@ void EyeAdaptationPass::Setup(RenderGraphBuilder& builder)
     // Store render context for Execute
     _renderContext = builder.GetRenderContext();
     
-    // Declare input/output resource (color buffer is both read and written)
-    _colorBufferRef = builder.ReadWriteTexture("ColorBuffer", RenderGraphTextureAccess::RTV);
+    // Eye adaptation applies exposure directly to the HDR scene frame after forward rendering.
+    _colorBufferRef = builder.ReadWriteTexture("InputFrame", RenderGraphTextureAccess::RTV);
 }
 
 void EyeAdaptationPass::Execute(GPUContext* context)

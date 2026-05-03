@@ -94,7 +94,7 @@ namespace FlaxEngine
     /// RenderGraph Pass 标志。
     /// </summary>
     [Flags]
-    public enum RenderGraphPassFlags
+    internal enum RenderGraphPassFlagsLegacy
     {
         /// <summary>
         /// 无标志。

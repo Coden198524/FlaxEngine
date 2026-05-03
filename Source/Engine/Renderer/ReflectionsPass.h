@@ -34,10 +34,16 @@ private:
     RenderGraphTextureRef _gbuffer1Ref;
     RenderGraphTextureRef _gbuffer2Ref;
     RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _motionVectorsRef;
     RenderGraphTextureRef _reflectionOutputRef;
     RenderContext* _renderContext = nullptr;
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReflectionsPass"/> class.
+    /// </summary>
+    ReflectionsPass();
+
     /// <summary>
     /// Perform reflections pass rendering for the input task.
     /// </summary>

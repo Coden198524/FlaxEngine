@@ -428,20 +428,28 @@ void DepthOfFieldPass::Render(RenderContext& renderContext, GPUTexture*& frame, 
 
 void DepthOfFieldPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare input dependencies: depth buffer and input frame
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
-    _inputFrameRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0);
-    
-    // Declare reads
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
+    _inputFrameRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+
+    GPUTexture* input = _inputFrameRef.GetTexture();
+    const int32 width = input ? input->Width() : _renderContext->Buffers->GetWidth();
+    const int32 height = input ? input->Height() : _renderContext->Buffers->GetHeight();
+    const PixelFormat format = input ? input->Format() : _renderContext->Buffers->GetOutputFormat();
+
+    GPUTextureFlags outputFlags = GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget;
+    if (GPUDevice::Instance->Limits.HasCompute && EnumHasAllFlags(GPUDevice::Instance->GetFormatFeatures(format).Support, FormatSupport::UnorderedAccessReadOnly | FormatSupport::UnorderedAccessWriteOnly))
+        outputFlags |= GPUTextureFlags::UnorderedAccess;
+
+    RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(width, height, format, outputFlags, TEXT("InputFrame"));
+    outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+    _outputFrameRef = builder.CreateTexture(outputDesc);
+
     ReadTexture(_depthBufferRef);
     ReadTexture(_inputFrameRef);
-    
-    // Create output frame texture
-    const int32 width = _renderContext->Buffers->GetWidth();
-    const int32 height = _renderContext->Buffers->GetHeight();
-    _outputFrameRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget | GPUTextureFlags::UnorderedAccess, TEXT("DOF_Output")));
-    
-    // Declare write
     WriteTexture(_outputFrameRef);
 }
 
@@ -449,10 +457,38 @@ void DepthOfFieldPass::Execute(GPUContext* context)
 {
     if (!_renderContext)
         return;
-    
-    // Execute the existing Render logic
-    GPUTexture* frame = _renderContext->Buffers->GBuffer0;
-    GPUTexture* tmp = nullptr;
-    Render(*_renderContext, frame, tmp);
-}
 
+    GPUTexture* input = _inputFrameRef.GetTexture();
+    GPUTexture* output = _outputFrameRef.GetTexture();
+    if (!input || !output)
+        return;
+
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
+    context->SetRenderTarget(*output);
+    context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+    context->Draw(input);
+    context->ResetRenderTarget();
+    context->ResetSR();
+
+    GPUTexture* tmp = RenderTargetPool::Get(output->GetDescription());
+    RENDER_TARGET_POOL_SET_NAME(tmp, "RenderGraph.DOF.Temp");
+    GPUTexture* frame = output;
+    Render(*_renderContext, frame, tmp);
+
+    if (frame && frame != output)
+    {
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+        context->SetRenderTarget(*output);
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        context->Draw(frame);
+    }
+
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
+    RenderTargetPool::Release(tmp);
+}

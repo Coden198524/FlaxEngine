@@ -554,6 +554,10 @@ void AmbientOcclusionPass::Render(RenderContext& renderContext)
 
 void AmbientOcclusionPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
     // Declare input dependencies: depth and normal buffers
     _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
     _normalBufferRef = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
@@ -579,4 +583,3 @@ void AmbientOcclusionPass::Execute(GPUContext* context)
     // Execute the existing Render logic
     Render(*_renderContext);
 }
-

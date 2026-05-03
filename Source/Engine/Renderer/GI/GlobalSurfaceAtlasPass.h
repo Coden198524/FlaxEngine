@@ -60,8 +60,14 @@ private:
     class GlobalSurfaceAtlasCustomBuffer* _surfaceAtlasData;
     uint64 _culledObjectsSizeFrames[8];
     void* _currentActorObject;
+    RenderContext* _renderContext = nullptr;
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GlobalSurfaceAtlasPass"/> class.
+    /// </summary>
+    GlobalSurfaceAtlasPass();
+
     /// <summary>
     /// Gets the Global Surface Atlas (only if enabled in Graphics Settings).
     /// </summary>

@@ -9,7 +9,7 @@
 /// <summary>
 /// Temporal Anti-Aliasing effect.
 /// </summary>
-class TAA : public RendererPass<TAA>, public RenderGraphComputePass
+class TAA : public RendererPass<TAA>, public RenderGraphRasterPass
 {
 private:
 
@@ -23,10 +23,13 @@ private:
     RenderGraphTextureRef _motionVectorsRef;
     RenderGraphTextureRef _depthBufferRef;
     RenderContext* _renderContext = nullptr;
-    GPUTexture* _input = nullptr;
-    GPUTextureView* _output = nullptr;
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TAA"/> class.
+    /// </summary>
+    TAA();
+
     /// <summary>
     /// Performs AA pass rendering for the input task.
     /// </summary>

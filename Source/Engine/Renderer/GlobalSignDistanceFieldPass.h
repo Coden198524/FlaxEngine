@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Core/Math/Vector3.h"
 
 /// <summary>
@@ -42,8 +43,14 @@ private:
     GPUConstantBuffer* _cb0 = nullptr;
     GPUConstantBuffer* _cb1 = nullptr;
     class DynamicStructuredBuffer* _objectsBuffer = nullptr;
+    RenderContext* _renderContext = nullptr;
 
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GlobalSignDistanceFieldPass"/> class.
+    /// </summary>
+    GlobalSignDistanceFieldPass();
+
     /// <summary>
     /// Calls drawing scene objects in async early in the frame.
     /// </summary>

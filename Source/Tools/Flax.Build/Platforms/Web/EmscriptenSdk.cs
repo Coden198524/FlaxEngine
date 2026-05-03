@@ -46,6 +46,8 @@ namespace Flax.Build.Platforms
             // Find Emscripten SDK folder path
             var sdkPath = Environment.GetEnvironmentVariable("EMSDK");
             if (string.IsNullOrEmpty(sdkPath))
+                sdkPath = FindSdkPath();
+            if (string.IsNullOrEmpty(sdkPath))
             {
                 Log.Warning("Missing Emscripten SDK. Cannot build for Web platform.");
             }
@@ -55,6 +57,7 @@ namespace Flax.Build.Platforms
             }
             else
             {
+                SetupEnvironment(sdkPath);
                 RootPath = sdkPath;
                 EmscriptenPath = Path.Combine(sdkPath, "upstream");
                 CMakeToolchainPath = Path.Combine(EmscriptenPath, "emscripten/cmake/Modules/Platform/Emscripten.cmake");
@@ -88,6 +91,84 @@ namespace Flax.Build.Platforms
                 else
                     Log.Warning($"Missing file {versionPath}");
             }
+        }
+
+        private static string FindSdkPath()
+        {
+            string[] searchDirs =
+            {
+                Path.Combine(Globals.EngineRoot, "emsdk"),
+                Path.Combine(Globals.EngineRoot, "..", "emsdk"),
+                Path.Combine(Globals.Root, "emsdk"),
+                Path.Combine(Globals.Root, "..", "emsdk"),
+            };
+
+            foreach (var searchDir in searchDirs)
+            {
+                var path = Utilities.RemovePathRelativeParts(searchDir);
+                var versionPath = Path.Combine(path, "upstream", "emscripten", "emscripten-version.txt");
+                if (File.Exists(versionPath))
+                    return path;
+            }
+
+            return null;
+        }
+
+        private static void SetupEnvironment(string sdkPath)
+        {
+            Environment.SetEnvironmentVariable("EMSDK", sdkPath);
+            var configPath = Path.Combine(sdkPath, ".emscripten");
+            if (File.Exists(configPath))
+                Environment.SetEnvironmentVariable("EM_CONFIG", configPath);
+
+            var nodePath = FindToolPath(Path.Combine(sdkPath, "node"), "node.exe", "bin");
+            if (nodePath != null)
+                Environment.SetEnvironmentVariable("EMSDK_NODE", nodePath);
+
+            var pythonPath = FindToolPath(Path.Combine(sdkPath, "python"), "python.exe");
+            if (pythonPath != null)
+                Environment.SetEnvironmentVariable("EMSDK_PYTHON", pythonPath);
+
+            string[] paths =
+            {
+                sdkPath,
+                Path.Combine(sdkPath, "upstream", "emscripten"),
+                Path.Combine(sdkPath, "upstream", "bin"),
+                nodePath != null ? Path.GetDirectoryName(nodePath) : null,
+                pythonPath != null ? Path.GetDirectoryName(pythonPath) : null,
+            };
+            PrependPath(paths);
+        }
+
+        private static string FindToolPath(string root, string fileName, string subDir = null)
+        {
+            if (!Directory.Exists(root))
+                return null;
+
+            var dirs = Directory.GetDirectories(root).OrderBy(x => x).ToArray();
+            for (int i = dirs.Length - 1; i >= 0; i--)
+            {
+                var path = subDir != null ? Path.Combine(dirs[i], subDir, fileName) : Path.Combine(dirs[i], fileName);
+                if (File.Exists(path))
+                    return path;
+            }
+
+            return null;
+        }
+
+        private static void PrependPath(string[] paths)
+        {
+            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var parts = currentPath.Split(Path.PathSeparator).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            for (int i = paths.Length - 1; i >= 0; i--)
+            {
+                var path = paths[i];
+                if (string.IsNullOrEmpty(path))
+                    continue;
+                parts.RemoveAll(x => string.Equals(x.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase));
+                parts.Insert(0, path);
+            }
+            Environment.SetEnvironmentVariable("PATH", string.Join(Path.PathSeparator.ToString(), parts));
         }
     }
 }

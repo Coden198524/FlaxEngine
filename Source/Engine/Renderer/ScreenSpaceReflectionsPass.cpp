@@ -416,6 +416,10 @@ void ScreenSpaceReflectionsPass::OnShaderReloading(Asset* obj)
 
 void ScreenSpaceReflectionsPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
     // Declare input dependencies: GBuffer data
     _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), _renderContext->Buffers->GBuffer0);
     _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
@@ -445,4 +449,3 @@ void ScreenSpaceReflectionsPass::Execute(GPUContext* context)
     // Execute the existing Render logic
     Render(*_renderContext, nullptr, _renderContext->Buffers->GBuffer0->View());
 }
-

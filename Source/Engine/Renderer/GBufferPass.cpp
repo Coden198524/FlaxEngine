@@ -403,9 +403,9 @@ void GBufferPass::OverrideDrawCalls(RenderContext& renderContext)
     }
 }
 
-void GBufferPass::DrawMaterialComplexity(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer)
+void GBufferPass::DrawMaterialComplexity(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer, GPUTextureView* outputView, const Viewport* outputViewport)
 {
-    _materialComplexity->Draw(renderContext, context, lightBuffer);
+    _materialComplexity->Draw(renderContext, context, lightBuffer, outputView, outputViewport);
 }
 
 #endif
@@ -567,17 +567,21 @@ void GBufferPass::DrawDecals(RenderContext& renderContext, GPUTextureView* light
 
 void GBufferPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
     // Declare output resources
     const int32 width = _renderContext->Buffers->GetWidth();
     const int32 height = _renderContext->Buffers->GetHeight();
 
-    // Create GBuffer textures
+    // Create light buffer and import task-owned GBuffer textures
     _lightBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("LightBuffer")));
-    _gbuffer0Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer0")));
-    _gbuffer1Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R10G10B10A2_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer1")));
-    _gbuffer2Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer2")));
-    _gbuffer3Ref = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("GBuffer3")));
-    _depthBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::D24_UNorm_S8_UInt, GPUTextureFlags::ShaderResource | GPUTextureFlags::DepthStencil, TEXT("DepthBuffer")));
+    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), _renderContext->Buffers->GBuffer0);
+    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
+    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), _renderContext->Buffers->GBuffer2);
+    _gbuffer3Ref = builder.ImportTexture(TEXT("GBuffer3"), _renderContext->Buffers->GBuffer3);
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
 
     // Declare outputs
     SetRenderTarget(0, _lightBufferRef);
@@ -596,15 +600,22 @@ void GBufferPass::Execute(GPUContext* context)
     PROFILE_GPU_CPU("GBuffer");
 
     // Get actual GPU textures
-    GPUTexture* lightBuffer = nullptr; // TODO: Get from builder
-    GPUTexture* depthBuffer = _renderContext->Buffers->DepthBuffer;
+    GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+    GPUTexture* gbuffer0 = _gbuffer0Ref.GetTexture();
+    GPUTexture* gbuffer1 = _gbuffer1Ref.GetTexture();
+    GPUTexture* gbuffer2 = _gbuffer2Ref.GetTexture();
+    GPUTexture* gbuffer3 = _gbuffer3Ref.GetTexture();
+    GPUTexture* depthBuffer = _depthBufferRef.GetTexture();
+    if (!lightBuffer || !gbuffer0 || !gbuffer1 || !gbuffer2 || !gbuffer3 || !depthBuffer)
+        return;
+
     GPUTextureView* targetBuffers[5] =
     {
-        lightBuffer ? lightBuffer->View() : nullptr,
-        _renderContext->Buffers->GBuffer0->View(),
-        _renderContext->Buffers->GBuffer1->View(),
-        _renderContext->Buffers->GBuffer2->View(),
-        _renderContext->Buffers->GBuffer3->View(),
+        lightBuffer->View(),
+        gbuffer0->View(),
+        gbuffer1->View(),
+        gbuffer2->View(),
+        gbuffer3->View(),
     };
     _renderContext->View.Pass = DrawPass::GBuffer;
     context->SetViewportAndScissors(_renderContext->Buffers->GetViewport());
@@ -614,12 +625,11 @@ void GBufferPass::Execute(GPUContext* context)
         PROFILE_GPU_CPU_NAMED("Clear");
 
         context->ClearDepth(*depthBuffer);
-        if (lightBuffer)
-            context->Clear(lightBuffer->View(), Color::Transparent);
-        context->Clear(_renderContext->Buffers->GBuffer0->View(), Color::Transparent);
-        context->Clear(_renderContext->Buffers->GBuffer1->View(), Color::Transparent);
-        context->Clear(_renderContext->Buffers->GBuffer2->View(), Color(1, 0, 0, 0));
-        context->Clear(_renderContext->Buffers->GBuffer3->View(), Color::Transparent);
+        context->Clear(lightBuffer->View(), Color::Transparent);
+        context->Clear(gbuffer0->View(), Color::Transparent);
+        context->Clear(gbuffer1->View(), Color::Transparent);
+        context->Clear(gbuffer2->View(), Color(1, 0, 0, 0));
+        context->Clear(gbuffer3->View(), Color::Transparent);
     }
 
     // Ensure to have valid data

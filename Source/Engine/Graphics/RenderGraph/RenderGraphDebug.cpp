@@ -5,7 +5,7 @@
 #include "RenderGraphCompiler.h"
 #include "Engine/Core/Log.h"
 #include "Engine/Core/Types/StringBuilder.h"
-#include "Engine/Platform/FileSystem.h"
+#include "Engine/Platform/File.h"
 
 // Forward declaration - will be defined in RenderGraph.h
 class RenderGraph;
@@ -85,8 +85,7 @@ bool RenderGraphDebug::ExportToDot(RenderGraph* graph, RenderGraphCompiler* comp
     output.Append(TEXT("}\n"));
 
     // Write to file
-    const String outputStr = output.ToString();
-    return FileSystem::WriteAllText(outputPath, outputStr);
+    return !File::WriteAllText(outputPath, output, Encoding::ANSI);
 }
 
 void RenderGraphDebug::CollectPassStatistics(RenderGraph* graph, RenderGraphCompiler* compiler)
@@ -246,7 +245,7 @@ void RenderGraphDebug::Clear()
     _resourceStats = ResourceStats();
 }
 
-void RenderGraphDebug::WriteDotNode(String& output, RenderGraphPass* pass, int32 passIndex)
+void RenderGraphDebug::WriteDotNode(StringBuilder& output, RenderGraphPass* pass, int32 passIndex)
 {
     if (!pass)
         return;
@@ -266,7 +265,7 @@ void RenderGraphDebug::WriteDotNode(String& output, RenderGraphPass* pass, int32
     }
 }
 
-void RenderGraphDebug::WriteDotEdge(String& output, int32 fromPass, int32 toPass, const String& resourceName)
+void RenderGraphDebug::WriteDotEdge(StringBuilder& output, int32 fromPass, int32 toPass, const String& resourceName)
 {
     output.AppendFormat(TEXT("    pass{0} -> pass{1} [label=\"{2}\"];\n"), 
                       fromPass, toPass, resourceName);

@@ -1717,6 +1717,8 @@ void ShadowsPass::GetShadowAtlas(const RenderBuffers* renderBuffers, GPUTexture*
 
 void ShadowsPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContext = builder.GetRenderContext();
+    _renderContextBatch = builder.GetRenderContextBatch();
     if (!_renderContext || !_renderContextBatch)
         return;
 

@@ -37,6 +37,7 @@
 #include "Engine/Level/Level.h"
 #include "Engine/Level/Scene/SceneRendering.h"
 #include "Engine/Core/Config/GraphicsSettings.h"
+#include "Engine/Engine/CommandLine.h"
 #include "Engine/Graphics/Graphics.h"
 #include "Engine/Threading/JobSystem.h"
 #include "Engine/Profiler/ProfilerMemory.h"
@@ -74,9 +75,8 @@ bool RendererService::Init()
 {
     PROFILE_MEM(Graphics);
 
-    // Register passes (singleton instances for legacy rendering path)
-    // Note: In RenderGraph architecture, passes are created per-frame and owned by the graph
-    // These singleton instances are kept for backward compatibility and legacy rendering path
+    // Register renderer passes. The legacy path calls them directly and the experimental RenderGraph path
+    // references the same initialized singleton instances without taking ownership.
     PassList.EnsureCapacity(64);
     PassList.Add(GBufferPass::Instance());
     PassList.Add(ShadowsPass::Instance());
@@ -111,8 +111,7 @@ bool RendererService::Init()
     }
 
 #if GPU_ENABLE_PRELOADING_RESOURCES
-    // Init child services (singleton passes for legacy path)
-    // In RenderGraph architecture, pass initialization happens when they are created
+    // Init child services
     for (int32 i = 0; i < PassList.Count(); i++)
     {
         if (PassList[i]->Init())
@@ -128,9 +127,7 @@ bool RendererService::Init()
 
 void RendererService::Dispose()
 {
-    // Dispose child services (singleton passes for legacy path)
-    // Note: In RenderGraph architecture, passes are owned by the graph and cleaned up automatically
-    // These singleton instances are kept for backward compatibility
+    // Dispose child services
     for (int32 i = 0; i < PassList.Count(); i++)
     {
         PassList[i]->Dispose();
@@ -204,6 +201,837 @@ void RenderLightBuffer(const SceneRenderTask* task, GPUContext* context, RenderC
     context->SetViewportAndScissors(task->GetOutputViewport());
     context->Draw(tempBuffer);
     RenderTargetPool::Release(tempBuffer);
+}
+
+class MotionVectorsRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _depthBufferRef;
+
+public:
+    MotionVectorsRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("MotionVectorsPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        // MotionVectors is lazily allocated by RenderMotionVectors(), so do not transition it here.
+        _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+        ReadTexture(_depthBufferRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (_renderContext)
+            MotionBlurPass::Instance()->RenderMotionVectors(*_renderContext);
+    }
+};
+
+class FogRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _depthBufferRef;
+
+public:
+    FogRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("FogPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
+        _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+
+        ReadTexture(_depthBufferRef);
+        SetRenderTarget(0, _lightBufferRef);
+        SetDepthStencil(_depthBufferRef, true);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext || !_renderContext->List)
+            return;
+
+        GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+        if (!lightBuffer)
+            return;
+
+        context->ResetSR();
+        if (_renderContext->List->Fog.Renderer)
+        {
+            VolumetricFogPass::Instance()->Render(*_renderContext);
+
+            PROFILE_GPU_CPU("Fog");
+            _renderContext->List->Fog.Renderer->DrawFog(context, *_renderContext, lightBuffer->View());
+            context->ResetSR();
+        }
+    }
+};
+
+enum class PostFxRenderGraphTarget
+{
+    LightBuffer,
+    InputFrame,
+};
+
+class PostFxRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _targetRef;
+    MaterialPostFxLocation _materialLocation;
+    PostProcessEffectLocation _customLocation;
+    PostFxRenderGraphTarget _target;
+
+public:
+    PostFxRenderGraphPass(const Char* name, MaterialPostFxLocation materialLocation, PostProcessEffectLocation customLocation, PostFxRenderGraphTarget target)
+        : RenderGraphRasterPass(name)
+        , _materialLocation(materialLocation)
+        , _customLocation(customLocation)
+        , _target(target)
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _targetRef = builder.ReadWriteTexture(_target == PostFxRenderGraphTarget::LightBuffer ? TEXT("LightBuffer") : TEXT("InputFrame"), RenderGraphTextureAccess::RTV);
+        SetRenderTarget(0, _targetRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext || !_renderContext->List)
+            return;
+
+        GPUTexture* target = _targetRef.GetTexture();
+        if (!target)
+            return;
+
+        const GPUTextureDescription desc = target->GetDescription();
+        GPUTexture* input = RenderTargetPool::Get(desc);
+        GPUTexture* output = RenderTargetPool::Get(desc);
+        RENDER_TARGET_POOL_SET_NAME(input, "RenderGraph.PostFx.Input");
+        RENDER_TARGET_POOL_SET_NAME(output, "RenderGraph.PostFx.Output");
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+        context->Transition(target, GPUResourceAccess::ShaderReadGraphics);
+        context->SetRenderTarget(*input);
+        context->SetViewportAndScissors((float)input->Width(), (float)input->Height());
+        context->Draw(target);
+
+        _renderContext->List->RunMaterialPostFxPass(context, *_renderContext, _materialLocation, input, output);
+        _renderContext->List->RunCustomPostFxPass(context, *_renderContext, _customLocation, input, output);
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+        context->Transition(target, GPUResourceAccess::RenderTarget);
+        context->SetRenderTarget(*target);
+        context->SetViewportAndScissors((float)target->Width(), (float)target->Height());
+        context->Draw(input);
+        context->ResetRenderTarget();
+        context->ResetSR();
+
+        RenderTargetPool::Release(output);
+        RenderTargetPool::Release(input);
+    }
+};
+
+class UpscaleRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _inputRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    UpscaleRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("UpscalePass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers || !_renderContext->Task)
+            return;
+
+        _inputRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+
+        GPUTexture* input = _inputRef.GetTexture();
+        const Viewport outputViewport = _renderContext->Task->GetOutputViewport();
+        const int32 width = (int32)outputViewport.Width;
+        const int32 height = (int32)outputViewport.Height;
+        const PixelFormat format = input ? input->Format() : _renderContext->Buffers->GetOutputFormat();
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(width, height, format, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("InputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        ReadTexture(_inputRef);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext || !_renderContext->List || !_renderContext->Task)
+            return;
+
+        GPUTexture* input = _inputRef.GetTexture();
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!input || !output)
+            return;
+
+        const Viewport outputViewport = _renderContext->Task->GetOutputViewport();
+        if (_renderContext->List->HasAnyPostFx(*_renderContext, PostProcessEffectLocation::CustomUpscale))
+        {
+            GPUTexture* frame = input;
+            GPUTexture* temp = output;
+            _renderContext->List->RunCustomPostFxPass(context, *_renderContext, PostProcessEffectLocation::CustomUpscale, frame, temp);
+            if (temp && temp->Width() == output->Width())
+                Swap(frame, temp);
+            if (frame != output)
+            {
+                context->ResetRenderTarget();
+                context->ResetSR();
+                context->ResetUA();
+                context->SetRenderTarget(*output);
+                context->SetViewportAndScissors(outputViewport);
+                context->Draw(frame);
+            }
+        }
+        else
+        {
+            context->ResetSR();
+            MultiScaler::Instance()->Upscale(context, outputViewport, input, output->View());
+        }
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+    }
+};
+
+class GBufferDebugRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _gbuffer0Ref;
+    RenderGraphTextureRef _gbuffer1Ref;
+    RenderGraphTextureRef _gbuffer2Ref;
+    RenderGraphTextureRef _gbuffer3Ref;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    GBufferDebugRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("GBufferDebugPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _gbuffer0Ref = builder.ReadTexture("GBuffer0", RenderGraphTextureAccess::SRV);
+        _gbuffer1Ref = builder.ReadTexture("GBuffer1", RenderGraphTextureAccess::SRV);
+        _gbuffer2Ref = builder.ReadTexture("GBuffer2", RenderGraphTextureAccess::SRV);
+        _gbuffer3Ref = builder.ReadTexture("GBuffer3", RenderGraphTextureAccess::SRV);
+        _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            _renderContext->Buffers->GetOutputFormat(),
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        ReadTexture(_gbuffer0Ref);
+        ReadTexture(_gbuffer1Ref);
+        ReadTexture(_gbuffer2Ref);
+        ReadTexture(_gbuffer3Ref);
+        ReadTexture(_depthBufferRef);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext)
+            return;
+
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!output)
+            return;
+
+        context->ResetRenderTarget();
+        context->SetRenderTarget(output->View());
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        GBufferPass::Instance()->RenderDebug(*_renderContext);
+        context->ResetRenderTarget();
+        context->ResetSR();
+    }
+};
+
+class CopyTextureRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    const Char* _name;
+    RenderGraphTextureRef _inputRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    CopyTextureRenderGraphPass(const Char* name, const Char* inputName)
+        : RenderGraphRasterPass(name)
+        , _name(inputName)
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _inputRef = builder.ReadTexture(_name, RenderGraphTextureAccess::SRV);
+        GPUTexture* input = _inputRef.GetTexture();
+        const PixelFormat format = input ? input->Format() : _renderContext->Buffers->GetOutputFormat();
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            format,
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        ReadTexture(_inputRef);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        GPUTexture* input = _inputRef.GetTexture();
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!input || !output)
+            return;
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->SetRenderTarget(output->View());
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        context->Draw(input);
+        context->ResetRenderTarget();
+        context->ResetSR();
+    }
+};
+
+enum class RenderGraphDebugOutput
+{
+    GlobalSDF,
+    GlobalSurfaceAtlas,
+    MotionVectors,
+};
+
+class DebugOutputRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphDebugOutput _mode;
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _inputFrameRef;
+    RenderGraphTextureRef _motionVectorsRef;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    DebugOutputRenderGraphPass(RenderGraphDebugOutput mode)
+        : RenderGraphRasterPass(TEXT("DebugOutputPass"))
+        , _mode(mode)
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        switch (_mode)
+        {
+        case RenderGraphDebugOutput::GlobalSDF:
+        case RenderGraphDebugOutput::GlobalSurfaceAtlas:
+            break;
+        case RenderGraphDebugOutput::MotionVectors:
+            _inputFrameRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+            _motionVectorsRef = builder.ReadTexture("MotionVectors", RenderGraphTextureAccess::SRV);
+            _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+            ReadTexture(_inputFrameRef);
+            ReadTexture(_motionVectorsRef);
+            ReadTexture(_depthBufferRef);
+            break;
+        }
+
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            _renderContext->Buffers->GetOutputFormat(),
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext)
+            return;
+
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!output)
+            return;
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+
+        switch (_mode)
+        {
+        case RenderGraphDebugOutput::GlobalSDF:
+            GlobalSignDistanceFieldPass::Instance()->RenderDebug(*_renderContext, context, output);
+            break;
+        case RenderGraphDebugOutput::GlobalSurfaceAtlas:
+            GlobalSurfaceAtlasPass::Instance()->RenderDebug(*_renderContext, context, output);
+            break;
+        case RenderGraphDebugOutput::MotionVectors:
+        {
+            GPUTexture* input = _inputFrameRef.GetTexture();
+            if (!input)
+                return;
+            context->SetRenderTarget(output->View());
+            MotionBlurPass::Instance()->RenderDebug(*_renderContext, input->View());
+            break;
+        }
+        }
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+    }
+};
+
+class LightBufferPostRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    LightBufferPostRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("LightBufferDebugPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            _renderContext->Buffers->GetOutputFormat(),
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        ReadTexture(_lightBufferRef);
+        WriteTexture(_lightBufferRef);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext)
+            return;
+
+        GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!lightBuffer || !output)
+            return;
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+
+        if (_renderContext->View.Mode == ViewMode::Reflections)
+        {
+            _renderContext->List->Settings.ToneMapping.Mode = ToneMappingMode::Neutral;
+            _renderContext->List->Settings.Bloom.Enabled = false;
+            _renderContext->List->Settings.LensFlares.Intensity = 0.0f;
+            _renderContext->List->Settings.CameraArtifacts.GrainAmount = 0.0f;
+            _renderContext->List->Settings.CameraArtifacts.ChromaticDistortion = 0.0f;
+            _renderContext->List->Settings.CameraArtifacts.VignetteIntensity = 0.0f;
+        }
+
+        auto colorGradingLUT = ColorGradingPass::Instance()->RenderLUT(*_renderContext);
+        GPUTexture* tempBuffer = RenderTargetPool::Get(output->GetDescription());
+        RENDER_TARGET_POOL_SET_NAME(tempBuffer, "RenderGraph.LightBufferDebug.Temp");
+        EyeAdaptationPass::Instance()->Render(*_renderContext, lightBuffer);
+        PostProcessingPass::Instance()->Render(*_renderContext, lightBuffer, tempBuffer, colorGradingLUT);
+        if (_renderContext->List->Settings.AntiAliasing.Mode == AntialiasingMode::TemporalAntialiasing)
+        {
+            TAA::Instance()->Render(*_renderContext, tempBuffer, output->View());
+        }
+        else
+        {
+            context->SetRenderTarget(output->View());
+            context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+            context->Draw(tempBuffer);
+        }
+        RenderTargetPool::Release(tempBuffer);
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+    }
+};
+
+#if USE_EDITOR
+class QuadOverdrawRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    QuadOverdrawRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("QuadOverdrawPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _depthBufferRef = builder.ReadWriteTexture("DepthBuffer", RenderGraphTextureAccess::RTV);
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            _renderContext->Buffers->GetOutputFormat(),
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        SetDepthStencil(_depthBufferRef, false);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext)
+            return;
+
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!output)
+            return;
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        QuadOverdrawPass::Instance()->Render(*_renderContext, context, output->View());
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->ResetUA();
+    }
+};
+
+class MaterialComplexityRenderGraphPass : public RenderGraphRasterPass
+{
+private:
+    RenderContext* _renderContext = nullptr;
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _outputRef;
+
+public:
+    MaterialComplexityRenderGraphPass()
+        : RenderGraphRasterPass(TEXT("MaterialComplexityPass"))
+    {
+    }
+
+    void Setup(RenderGraphBuilder& builder) override
+    {
+        _renderContext = builder.GetRenderContext();
+        if (!_renderContext || !_renderContext->Buffers)
+            return;
+
+        _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
+        _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+        RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
+            _renderContext->Buffers->GetWidth(),
+            _renderContext->Buffers->GetHeight(),
+            _renderContext->Buffers->GetOutputFormat(),
+            GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
+            TEXT("OutputFrame"));
+        outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+        _outputRef = builder.CreateTexture(outputDesc);
+
+        ReadTexture(_lightBufferRef);
+        WriteTexture(_lightBufferRef);
+        ReadTexture(_depthBufferRef);
+        SetRenderTarget(0, _outputRef);
+    }
+
+    void Execute(GPUContext* context) override
+    {
+        if (!_renderContext)
+            return;
+
+        GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+        GPUTexture* output = _outputRef.GetTexture();
+        if (!lightBuffer || !output)
+            return;
+
+        Viewport outputViewport(Float2((float)output->Width(), (float)output->Height()));
+        GBufferPass::Instance()->DrawMaterialComplexity(*_renderContext, context, lightBuffer->View(), output->View(), &outputViewport);
+        context->ResetRenderTarget();
+        context->ResetSR();
+    }
+};
+#endif
+
+bool HasRenderGraphUnsupportedPostFx(const RenderContext& renderContext)
+{
+    return false;
+}
+
+const Char* GetRenderGraphUnsupportedReason(const SceneRenderTask* task, const RenderContext& renderContext)
+{
+    const RenderView& view = renderContext.View;
+    const RenderList* list = renderContext.List;
+    const PostProcessSettings& settings = list->Settings;
+    const RenderSetup& setup = list->Setup;
+
+    switch (view.Mode)
+    {
+    case ViewMode::Default:
+    case ViewMode::NoPostFx:
+    case ViewMode::Diffuse:
+    case ViewMode::Normals:
+    case ViewMode::Emissive:
+    case ViewMode::Depth:
+    case ViewMode::AmbientOcclusion:
+    case ViewMode::Metalness:
+    case ViewMode::Roughness:
+    case ViewMode::Specular:
+    case ViewMode::SpecularColor:
+    case ViewMode::ShadingModel:
+    case ViewMode::LightBuffer:
+    case ViewMode::Reflections:
+    case ViewMode::Wireframe:
+    case ViewMode::MotionVectors:
+    case ViewMode::SubsurfaceColor:
+    case ViewMode::Unlit:
+    case ViewMode::LightmapUVsDensity:
+    case ViewMode::VertexColors:
+    case ViewMode::PhysicsColliders:
+    case ViewMode::LODPreview:
+    case ViewMode::MaterialComplexity:
+    case ViewMode::QuadOverdraw:
+    case ViewMode::GlobalSDF:
+    case ViewMode::GlobalSurfaceAtlas:
+    case ViewMode::GlobalIllumination:
+        break;
+    default:
+        return TEXT("view mode");
+    }
+    if (list->AtmosphericFog)
+        return TEXT("atmospheric fog");
+    if (HasRenderGraphUnsupportedPostFx(renderContext))
+        return TEXT("custom post effects");
+
+    return nullptr;
+}
+
+bool CanUseRenderGraphForFrame(const SceneRenderTask* task, const RenderContext& renderContext)
+{
+    return GetRenderGraphUnsupportedReason(task, renderContext) == nullptr;
+}
+
+bool PresentRenderGraphOutput(const SceneRenderTask* task, GPUContext* context, RenderContext& renderContext, RenderGraph& graph)
+{
+    GPUTexture* frame = graph.GetTexture(TEXT("OutputFrame"));
+    const bool hasPostProcessingOutput = frame != nullptr;
+    if (!frame)
+        frame = graph.GetTexture(TEXT("InputFrame"));
+    if (!frame)
+        frame = graph.GetTexture(TEXT("LightBuffer"));
+    if (!frame)
+        return false;
+
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->FlushState();
+
+    const Viewport outputViewport = task->GetOutputViewport();
+    GPUTextureView* outputView = task->GetOutputView();
+    const ViewMode viewMode = renderContext.View.Mode;
+    const bool directOutput =
+            hasPostProcessingOutput &&
+            (GBufferPass::IsDebugView(viewMode) ||
+             viewMode == ViewMode::Emissive ||
+             viewMode == ViewMode::VertexColors ||
+             viewMode == ViewMode::LightmapUVsDensity ||
+             viewMode == ViewMode::PhysicsColliders ||
+             viewMode == ViewMode::MaterialComplexity ||
+             viewMode == ViewMode::QuadOverdraw ||
+             viewMode == ViewMode::GlobalSDF ||
+             viewMode == ViewMode::GlobalSurfaceAtlas ||
+             viewMode == ViewMode::LightBuffer ||
+             viewMode == ViewMode::Reflections ||
+             viewMode == ViewMode::MotionVectors);
+    if (directOutput)
+    {
+        context->SetRenderTarget(outputView);
+        context->SetViewportAndScissors(outputViewport);
+        context->Draw(frame);
+        return true;
+    }
+    if (viewMode == ViewMode::NoPostFx || viewMode == ViewMode::Wireframe)
+    {
+        context->SetRenderTarget(outputView);
+        context->SetViewportAndScissors(outputViewport);
+        if (!Graphics::GammaColorSpace)
+            GBufferPass::Instance()->DrawLinearToSrgb(renderContext, frame);
+        else
+            context->Draw(frame);
+        return true;
+    }
+
+    GPUTexture* frameBuffer = frame;
+    GPUTexture* tempBuffer = nullptr;
+    GPUTexture* presentTempBuffer = nullptr;
+    const GPUTextureDescription tempDesc = frame->GetDescription();
+    const bool hasLatePostFx =
+            renderContext.List->HasAnyPostFx(renderContext, MaterialPostFxLocation::AfterPostProcessingPass) ||
+            renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::Default) ||
+            renderContext.List->HasAnyPostFx(renderContext, MaterialPostFxLocation::AfterCustomPostEffects);
+    const bool hasAfterAA =
+            renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::AfterAntiAliasingPass, MaterialPostFxLocation::AfterAntiAliasingPass);
+    const bool useUpscaling =
+            task->RenderingPercentage < 1.0f &&
+            renderContext.List->Setup.UpscaleLocation == RenderingUpscaleLocation::AfterAntiAliasingPass;
+
+    if (hasLatePostFx || hasAfterAA || useUpscaling)
+    {
+        tempBuffer = RenderTargetPool::Get(tempDesc);
+        presentTempBuffer = tempBuffer;
+        RENDER_TARGET_POOL_SET_NAME(tempBuffer, "RenderGraph.PresentTemp");
+    }
+
+    if (hasLatePostFx)
+    {
+        renderContext.List->RunMaterialPostFxPass(context, renderContext, MaterialPostFxLocation::AfterPostProcessingPass, frameBuffer, tempBuffer);
+        renderContext.List->RunCustomPostFxPass(context, renderContext, PostProcessEffectLocation::Default, frameBuffer, tempBuffer);
+        renderContext.List->RunMaterialPostFxPass(context, renderContext, MaterialPostFxLocation::AfterCustomPostEffects, frameBuffer, tempBuffer);
+
+        context->ResetRenderTarget();
+        context->ResetSR();
+        context->FlushState();
+    }
+
+    if (!hasAfterAA)
+    {
+        if (!useUpscaling)
+        {
+            RenderAntiAliasingPass(renderContext, frameBuffer, outputView, outputViewport);
+        }
+        else
+        {
+            RenderAntiAliasingPass(renderContext, frameBuffer, *tempBuffer, Viewport(Float2(renderContext.View.ScreenSize)));
+            context->ResetRenderTarget();
+            Swap(frameBuffer, tempBuffer);
+        }
+    }
+    else
+    {
+        RenderAntiAliasingPass(renderContext, frameBuffer, *tempBuffer, Viewport(Float2(renderContext.View.ScreenSize)));
+        context->ResetRenderTarget();
+        Swap(frameBuffer, tempBuffer);
+        renderContext.List->RunCustomPostFxPass(context, renderContext, PostProcessEffectLocation::AfterAntiAliasingPass, frameBuffer, tempBuffer);
+        renderContext.List->RunMaterialPostFxPass(context, renderContext, MaterialPostFxLocation::AfterAntiAliasingPass, frameBuffer, tempBuffer);
+    }
+
+    if (useUpscaling)
+    {
+        if (renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::CustomUpscale))
+        {
+            if (outputView->GetParent()->Is<GPUTexture>())
+            {
+                auto outputTexture = (GPUTexture*)outputView->GetParent();
+                renderContext.List->RunCustomPostFxPass(context, renderContext, PostProcessEffectLocation::CustomUpscale, frameBuffer, outputTexture);
+            }
+            else
+            {
+                GPUTextureDescription upscaleDesc = tempDesc;
+                upscaleDesc.Width = (int32)outputViewport.Width;
+                upscaleDesc.Height = (int32)outputViewport.Height;
+                GPUTexture* upscaleTemp = RenderTargetPool::Get(upscaleDesc);
+                RENDER_TARGET_POOL_SET_NAME(upscaleTemp, "RenderGraph.PresentUpscaleTemp");
+                renderContext.List->RunCustomPostFxPass(context, renderContext, PostProcessEffectLocation::CustomUpscale, frameBuffer, upscaleTemp);
+                PROFILE_GPU("Copy frame");
+                context->SetRenderTarget(outputView);
+                context->SetViewportAndScissors(outputViewport);
+                context->Draw(frameBuffer);
+                RenderTargetPool::Release(upscaleTemp);
+            }
+        }
+        else
+        {
+            MultiScaler::Instance()->Upscale(context, outputViewport, frameBuffer, outputView);
+        }
+    }
+    else if (hasAfterAA)
+    {
+        PROFILE_GPU("Copy frame");
+        context->SetRenderTarget(outputView);
+        context->SetViewportAndScissors(outputViewport);
+        context->Draw(frameBuffer);
+    }
+
+    RenderTargetPool::Release(presentTempBuffer);
+    return hasPostProcessingOutput || frameBuffer != nullptr;
 }
 
 bool Renderer::IsReady()
@@ -375,10 +1203,7 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
     auto& view = renderContext.View;
     ASSERT(renderContext.Buffers && renderContext.Buffers->GetWidth() > 0);
 
-    // Check if we should use RenderGraph architecture
-    // For now, use a compile-time flag to enable/disable RenderGraph
-    // TODO: Add runtime configuration option
-    const bool useRenderGraph = false; // Set to true to enable RenderGraph path
+    const bool useRenderGraph = CommandLine::Options.RenderGraph.GetValueOr(true) && !CommandLine::Options.NoRenderGraph.GetValueOr(false);
 
     // Perform postFx volumes blending and query before rendering
     task->CollectPostFxVolumes(renderContext);
@@ -575,30 +1400,52 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
     }
 
     // RenderGraph execution path
-    if (useRenderGraph)
+    const Char* renderGraphUnsupportedReason = useRenderGraph ? GetRenderGraphUnsupportedReason(task, renderContext) : nullptr;
+    const bool canUseRenderGraph = useRenderGraph && renderGraphUnsupportedReason == nullptr;
+    if (useRenderGraph && !canUseRenderGraph)
+    {
+        static bool warnedUnsupportedRenderGraphFrame = false;
+        if (!warnedUnsupportedRenderGraphFrame)
+        {
+            LOG(Info, "RenderGraph renderer enabled but current frame uses unsupported feature '{0}'. Falling back to legacy renderer.", renderGraphUnsupportedReason);
+            warnedUnsupportedRenderGraphFrame = true;
+        }
+    }
+    if (canUseRenderGraph)
     {
         PROFILE_GPU_CPU_NAMED("RenderGraph Execute");
 
         // Create and build the render graph
         RenderGraph graph;
-        BuildRenderGraph(graph, renderContext, renderContextBatch);
+        Renderer::BuildRenderGraph(graph, renderContext, renderContextBatch);
 
-        // Compile the graph (optimize, resolve dependencies)
+        bool graphSucceeded = true;
         if (!graph.Compile())
         {
-            LOG(Error, "Failed to compile render graph");
-            return;
+            LOG(Warning, "Failed to compile render graph. Falling back to legacy renderer.");
+            graphSucceeded = false;
         }
-
-        // Execute the graph
-        if (!graph.Execute(context))
+        else if (!graph.Execute(context))
         {
-            LOG(Error, "Failed to execute render graph");
-            return;
+            LOG(Warning, "Failed to execute render graph. Falling back to legacy renderer.");
+            graphSucceeded = false;
+        }
+        else if (!PresentRenderGraphOutput(task, context, renderContext, graph))
+        {
+            LOG(Warning, "Failed to present render graph output. Falling back to legacy renderer.");
+            graphSucceeded = false;
         }
 
-        // Graph automatically cleans up when it goes out of scope
-        return;
+        if (graphSucceeded)
+        {
+            static bool loggedRenderGraphActive = false;
+            if (!loggedRenderGraphActive)
+            {
+                LOG(Info, "RenderGraph renderer path active.");
+                loggedRenderGraphActive = true;
+            }
+            return;
+        }
     }
 
     // Legacy rendering path (original hardcoded pipeline)
@@ -907,42 +1754,70 @@ void Renderer::BuildRenderGraph(RenderGraph& graph, RenderContext& renderContext
 
     // Clear any previous graph state
     graph.Clear();
+    graph.SetContext(&renderContext, &renderContextBatch);
 
-    // Global SDF Pass (if enabled)
+    auto addPass = [&graph](RenderGraphPass* pass)
+    {
+        graph.AddPass(pass, false, true);
+    };
+
+#if USE_EDITOR
+    if (view.Mode == ViewMode::QuadOverdraw)
+    {
+        graph.AddPass(New<QuadOverdrawRenderGraphPass>(), true, true);
+        return;
+    }
+#endif
+
     if (setup.UseGlobalSDF)
     {
-        // Note: GlobalSignDistanceFieldPass may need special handling as it's not a standard RenderGraphPass yet
-        // For now, we'll handle it in the legacy path
+        addPass(GlobalSignDistanceFieldPass::Instance());
     }
 
-    // Global Surface Atlas Pass (if enabled)
     if (setup.UseGlobalSurfaceAtlas)
     {
-        // Note: GlobalSurfaceAtlasPass may need special handling
-        // For now, we'll handle it in the legacy path
+        addPass(GlobalSurfaceAtlasPass::Instance());
     }
 
-    // GBuffer Pass - always needed for deferred rendering
-    if (!isGBufferDebug || view.Mode == ViewMode::MaterialComplexity)
-    {
-        auto* gbufferPass = New<GBufferPass>();
-        graph.AddPass(gbufferPass);
-    }
+    // GBuffer Pass - always needed for deferred rendering and GBuffer debug views.
+    addPass(GBufferPass::Instance());
 
-    // Motion Vectors Pass
-    if (setup.UseMotionVectors)
+    if (view.Mode == ViewMode::GlobalSDF)
     {
-        auto* motionBlurPass = New<MotionBlurPass>();
-        graph.AddPass(motionBlurPass);
+        graph.AddPass(New<DebugOutputRenderGraphPass>(RenderGraphDebugOutput::GlobalSDF), true, true);
+        return;
     }
+    if (view.Mode == ViewMode::GlobalSurfaceAtlas)
+    {
+        graph.AddPass(New<DebugOutputRenderGraphPass>(RenderGraphDebugOutput::GlobalSurfaceAtlas), true, true);
+        return;
+    }
+    if (view.Mode == ViewMode::Emissive ||
+        view.Mode == ViewMode::VertexColors ||
+        view.Mode == ViewMode::LightmapUVsDensity)
+    {
+        graph.AddPass(New<CopyTextureRenderGraphPass>(TEXT("DebugLightBufferCopyPass"), TEXT("LightBuffer")), true, true);
+        return;
+    }
+    if (view.Mode == ViewMode::PhysicsColliders)
+    {
+        graph.AddPass(New<CopyTextureRenderGraphPass>(TEXT("PhysicsCollidersCopyPass"), TEXT("LightBuffer")), true, true);
+        return;
+    }
+#if USE_EDITOR
+    if (view.Mode == ViewMode::MaterialComplexity)
+    {
+        graph.AddPass(New<MaterialComplexityRenderGraphPass>(), true, true);
+        return;
+    }
+#endif
 
     // Ambient Occlusion Pass
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::AO) && 
+    if ((EnumHasAnyFlags(view.Flags, ViewFlags::AO) || view.Mode == ViewMode::AmbientOcclusion) &&
         renderContext.List->Settings.AmbientOcclusion.Enabled &&
-        !isGBufferDebug)
+        (!isGBufferDebug || view.Mode == ViewMode::AmbientOcclusion))
     {
-        auto* aoPass = New<AmbientOcclusionPass>();
-        graph.AddPass(aoPass);
+        addPass(AmbientOcclusionPass::Instance());
     }
 
     // Shadow Maps Pass
@@ -961,139 +1836,125 @@ void Renderer::BuildRenderGraph(RenderGraph& graph, RenderContext& renderContext
     }
     if (drawShadows)
     {
-        auto* shadowsPass = New<ShadowsPass>();
-        graph.AddPass(shadowsPass);
+        addPass(ShadowsPass::Instance());
+    }
+
+    if (setup.UseMotionVectors)
+    {
+        graph.AddPass(New<MotionVectorsRenderGraphPass>(), true, true);
     }
 
     // Light Pass - deferred lighting
     if (!isGBufferDebug)
     {
-        auto* lightPass = New<LightPass>();
-        graph.AddPass(lightPass);
+        addPass(LightPass::Instance());
     }
 
-    // Global Illumination Pass
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::GI) && !isGBufferDebug)
+    if (!isGBufferDebug && EnumHasAnyFlags(view.Flags, ViewFlags::GI) && renderContext.List->Settings.GlobalIllumination.Mode == GlobalIlluminationMode::DDGI)
     {
-        switch (renderContext.List->Settings.GlobalIllumination.Mode)
-        {
-        case GlobalIlluminationMode::DDGI:
-        {
-            auto* ddgiPass = New<DynamicDiffuseGlobalIlluminationPass>();
-            graph.AddPass(ddgiPass);
-            break;
-        }
-        }
+        addPass(DynamicDiffuseGlobalIlluminationPass::Instance());
+    }
+
+    if (view.Mode == ViewMode::LightBuffer)
+    {
+        graph.AddPass(New<LightBufferPostRenderGraphPass>(), true, true);
+        return;
+    }
+
+    if (!isGBufferDebug && renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::BeforeReflectionsPass, MaterialPostFxLocation::BeforeReflectionsPass))
+    {
+        graph.AddPass(New<PostFxRenderGraphPass>(TEXT("PostFxBeforeReflectionsPass"), MaterialPostFxLocation::BeforeReflectionsPass, PostProcessEffectLocation::BeforeReflectionsPass, PostFxRenderGraphTarget::LightBuffer), true, true);
     }
 
     // Reflections Pass
     if (EnumHasAnyFlags(view.Flags, ViewFlags::Reflections) && !isGBufferDebug)
     {
-        auto* reflectionsPass = New<ReflectionsPass>();
-        graph.AddPass(reflectionsPass);
+        addPass(ReflectionsPass::Instance());
     }
 
-    // Screen Space Reflections Pass
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::SSR) && 
-        renderContext.List->Settings.ScreenSpaceReflections.Intensity > ZeroTolerance &&
-        !isGBufferDebug)
+    if (view.Mode == ViewMode::Reflections)
     {
-        auto* ssrPass = New<ScreenSpaceReflectionsPass>();
-        graph.AddPass(ssrPass);
+        graph.AddPass(New<LightBufferPostRenderGraphPass>(), true, true);
+        return;
     }
 
-    // Volumetric Fog Pass
-    if (setup.UseVolumetricFog && !isGBufferDebug)
+    if (!isGBufferDebug && renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::BeforeForwardPass, MaterialPostFxLocation::BeforeForwardPass))
     {
-        auto* volumetricFogPass = New<VolumetricFogPass>();
-        graph.AddPass(volumetricFogPass);
+        graph.AddPass(New<PostFxRenderGraphPass>(TEXT("PostFxBeforeForwardPass"), MaterialPostFxLocation::BeforeForwardPass, PostProcessEffectLocation::BeforeForwardPass, PostFxRenderGraphTarget::LightBuffer), true, true);
+    }
+
+    if (!isGBufferDebug && renderContext.List->Fog.Renderer)
+    {
+        graph.AddPass(New<FogRenderGraphPass>(), true, true);
     }
 
     // Forward Pass - for transparent objects and forward rendering
     if (!isGBufferDebug)
     {
-        auto* forwardPass = New<ForwardPass>();
-        graph.AddPass(forwardPass);
+        addPass(ForwardPass::Instance());
+    }
+
+    if (!isGBufferDebug && renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::AfterForwardPass, MaterialPostFxLocation::AfterForwardPass))
+    {
+        graph.AddPass(New<PostFxRenderGraphPass>(TEXT("PostFxAfterForwardPass"), MaterialPostFxLocation::AfterForwardPass, PostProcessEffectLocation::AfterForwardPass, PostFxRenderGraphTarget::InputFrame), true, true);
     }
 
     // Skip post-processing for certain view modes
-    if (view.Mode == ViewMode::NoPostFx || 
-        view.Mode == ViewMode::Wireframe ||
-        isGBufferDebug)
+    if (isGBufferDebug)
+    {
+        graph.AddPass(New<GBufferDebugRenderGraphPass>(), true, true);
+        return;
+    }
+    if (view.Mode == ViewMode::NoPostFx ||
+        view.Mode == ViewMode::Wireframe)
     {
         return;
     }
 
-    // Depth of Field Pass
+    if (renderContext.List->HasAnyPostFx(renderContext, PostProcessEffectLocation::BeforePostProcessingPass, MaterialPostFxLocation::BeforePostProcessingPass))
+    {
+        graph.AddPass(New<PostFxRenderGraphPass>(TEXT("PostFxBeforePostProcessingPass"), MaterialPostFxLocation::BeforePostProcessingPass, PostProcessEffectLocation::BeforePostProcessingPass, PostFxRenderGraphTarget::InputFrame), true, true);
+    }
+
+    if (renderContext.Task &&
+        renderContext.Task->RenderingPercentage < 1.0f &&
+        setup.UpscaleLocation == RenderingUpscaleLocation::BeforePostProcessingPass)
+    {
+        graph.AddPass(New<UpscaleRenderGraphPass>(), true, true);
+    }
+
+    // Temporal Anti-Aliasing runs on the HDR scene frame before post-processing.
+    if (renderContext.List->Settings.AntiAliasing.Mode == AntialiasingMode::TemporalAntialiasing)
+    {
+        addPass(TAA::Instance());
+    }
+
     if (EnumHasAnyFlags(view.Flags, ViewFlags::DepthOfField) &&
         renderContext.List->Settings.DepthOfField.Enabled)
     {
-        auto* dofPass = New<DepthOfFieldPass>();
-        graph.AddPass(dofPass);
+        addPass(DepthOfFieldPass::Instance());
     }
 
-    // Motion Blur Pass (rendering)
     if (EnumHasAnyFlags(view.Flags, ViewFlags::MotionBlur) &&
         renderContext.List->Settings.MotionBlur.Enabled &&
         renderContext.List->Settings.MotionBlur.Scale > ZeroTolerance)
     {
-        // Motion blur rendering pass (different from motion vectors generation)
-        // Note: MotionBlurPass handles both motion vectors and blur rendering
+        addPass(MotionBlurPass::Instance());
+    }
+
+    if (view.Mode == ViewMode::MotionVectors)
+    {
+        graph.AddPass(New<DebugOutputRenderGraphPass>(RenderGraphDebugOutput::MotionVectors), true, true);
+        return;
     }
 
     // Eye Adaptation Pass
     if (EnumHasAnyFlags(view.Flags, ViewFlags::EyeAdaptation))
     {
-        auto* eyeAdaptationPass = New<EyeAdaptationPass>();
-        graph.AddPass(eyeAdaptationPass);
+        addPass(EyeAdaptationPass::Instance());
     }
 
-    // Histogram Pass (for eye adaptation)
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::EyeAdaptation))
-    {
-        auto* histogramPass = New<HistogramPass>();
-        graph.AddPass(histogramPass);
-    }
-
-    // Color Grading Pass
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::ColorGrading))
-    {
-        auto* colorGradingPass = New<ColorGradingPass>();
-        graph.AddPass(colorGradingPass);
-    }
-
-    // Post Processing Pass (bloom, tone mapping, etc.)
-    if (EnumHasAnyFlags(view.Flags, ViewFlags::Bloom | ViewFlags::ToneMapping))
-    {
-        auto* postProcessingPass = New<PostProcessingPass>();
-        graph.AddPass(postProcessingPass);
-    }
-
-    // Temporal Anti-Aliasing Pass
-    if (renderContext.List->Settings.AntiAliasing.Mode == AntialiasingMode::TemporalAntialiasing)
-    {
-        auto* taaPass = New<TAA>();
-        graph.AddPass(taaPass);
-    }
-
-    // Anti-Aliasing Pass (FXAA/SMAA)
-    const auto aaMode = renderContext.List->Settings.AntiAliasing.Mode;
-    if (aaMode == AntialiasingMode::FastApproximateAntialiasing)
-    {
-        auto* fxaaPass = New<FXAA>();
-        graph.AddPass(fxaaPass);
-    }
-    else if (aaMode == AntialiasingMode::SubpixelMorphologicalAntialiasing)
-    {
-        auto* smaaPass = New<SMAA>();
-        graph.AddPass(smaaPass);
-    }
-
-    // Contrast Adaptive Sharpening Pass
-    if (ContrastAdaptiveSharpeningPass::Instance()->CanRender(renderContext))
-    {
-        auto* casPass = New<ContrastAdaptiveSharpeningPass>();
-        graph.AddPass(casPass);
-    }
+    // Post Processing Pass (bloom, tone mapping, camera artifacts, color grading, etc.).
+    // Match the legacy path: the pass itself decides whether to apply effects or just copy the frame.
+    addPass(PostProcessingPass::Instance());
 }
-

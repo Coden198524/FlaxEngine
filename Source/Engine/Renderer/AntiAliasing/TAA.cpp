@@ -11,6 +11,7 @@
 #include "Engine/Renderer/GBufferPass.h"
 #include "Engine/Engine/Engine.h"
 #include "Engine/Graphics/RenderTools.h"
+#include "Engine/Graphics/RenderGraph/RenderGraph.h"
 
 GPU_CB_STRUCT(Data {
     Float2 ScreenSizeInv;
@@ -23,6 +24,12 @@ GPU_CB_STRUCT(Data {
     float Dummy1;
     ShaderGBufferData GBuffer;
     });
+
+TAA::TAA()
+    : RenderGraphRasterPass(TEXT("TAA"))
+    , _psTAA(nullptr)
+{
+}
 
 bool TAA::Init()
 {
@@ -144,8 +151,12 @@ void TAA::Render(const RenderContext& renderContext, GPUTexture* input, GPUTextu
     {
         RenderTargetPool::Release(inputHistory);
         context->ResetRenderTarget();
+        context->ResetSR();
+        context->FlushState();
         context->SetRenderTarget(outputHistory->View());
         context->Draw(output);
+        context->ResetRenderTarget();
+        context->ResetSR();
         renderContext.Buffers->TemporalAA = outputHistory;
     }
 
@@ -155,44 +166,47 @@ void TAA::Render(const RenderContext& renderContext, GPUTexture* input, GPUTextu
 
 void TAA::Setup(RenderGraphBuilder& builder)
 {
-    // Import input textures
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
-    _motionVectorsRef = builder.ImportTexture(TEXT("MotionVectors"), _renderContext->Buffers->MotionVectors);
-    
-    // Declare reads
-    builder.Read(_depthBufferRef);
-    builder.Read(_motionVectorsRef);
-    
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
+    _inputRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    _motionVectorsRef = builder.ReadTexture("MotionVectors", RenderGraphTextureAccess::SRV);
+
     // Import or create history buffer
     if (_renderContext->Buffers->TemporalAA)
     {
         _historyRef = builder.ImportTexture(TEXT("TAA_History"), _renderContext->Buffers->TemporalAA);
         builder.Read(_historyRef);
     }
-    
-    // Create output texture
-    const int32 width = _input ? _input->Width() : _renderContext->Buffers->GetWidth();
-    const int32 height = _input ? _input->Height() : _renderContext->Buffers->GetHeight();
-    const PixelFormat format = _input ? _input->Format() : PixelFormat::R11G11B10_Float;
-    
-    RenderGraphTextureDesc outputDesc;
-    outputDesc.Width = width;
-    outputDesc.Height = height;
-    outputDesc.Format = format;
-    outputDesc.Flags = GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget;
-    
+
+    GPUTexture* input = _inputRef.GetTexture();
+    const int32 width = input ? input->Width() : _renderContext->Buffers->GetWidth();
+    const int32 height = input ? input->Height() : _renderContext->Buffers->GetHeight();
+    const PixelFormat format = input ? input->Format() : _renderContext->Buffers->GetOutputFormat();
+
+    // Re-register InputFrame after reading it so downstream passes consume the resolved frame.
+    RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(width, height, format, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("InputFrame"));
+    outputDesc.Flags |= RenderGraphResourceFlags::Exported;
     _outputRef = builder.CreateTexture(outputDesc);
-    
-    // Declare write
-    builder.Write(_outputRef);
+
+    ReadTexture(_inputRef);
+    ReadTexture(_depthBufferRef);
+    ReadTexture(_motionVectorsRef);
+    SetRenderTarget(0, _outputRef);
 }
 
-void TAA::Execute(RenderGraphBuilder& builder, GPUContext* context)
+void TAA::Execute(GPUContext* context)
 {
-    if (!_renderContext || !_input || !_output)
+    if (!_renderContext)
         return;
-    
-    // Execute the existing Render logic
-    Render(*_renderContext, _input, _output);
-}
 
+    GPUTexture* input = _inputRef.GetTexture();
+    GPUTexture* output = _outputRef.GetTexture();
+    if (!input || !output)
+        return;
+
+    // Execute the existing Render logic
+    Render(*_renderContext, input, output->View());
+}

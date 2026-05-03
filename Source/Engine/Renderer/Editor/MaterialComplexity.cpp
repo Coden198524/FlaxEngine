@@ -117,7 +117,7 @@ void MaterialComplexityMaterialShader::DebugOverrideDrawCallsMaterial(RenderCont
         DebugOverrideDrawCallsMaterial(e.DrawCall, isReady);
 }
 
-void MaterialComplexityMaterialShader::Draw(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer)
+void MaterialComplexityMaterialShader::Draw(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer, GPUTextureView* outputView, const Viewport* outputViewport)
 {
     // Draw decals into Light buffer to include them into complexity drawing
     auto& decals = renderContext.List->Decals;
@@ -165,8 +165,10 @@ void MaterialComplexityMaterialShader::Draw(RenderContext& renderContext, GPUCon
 
     // Draw accumulated complexity into colors gradient
     context->ResetRenderTarget();
-    context->SetRenderTarget(renderContext.Task->GetOutputView());
-    context->SetViewportAndScissors(renderContext.Task->GetOutputViewport());
+    if (!outputView)
+        outputView = renderContext.Task->GetOutputView();
+    context->SetRenderTarget(outputView);
+    context->SetViewportAndScissors(outputViewport ? *outputViewport : renderContext.Task->GetOutputViewport());
     if (_shader && _shader->IsLoaded())
     {
         if (!_ps)

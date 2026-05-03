@@ -155,22 +155,25 @@ void ForwardPass::Render(RenderContext& renderContext, GPUTexture*& input, GPUTe
 
 void ForwardPass::Setup(RenderGraphBuilder& builder)
 {
-    if (!_renderContext)
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
         return;
 
     const int32 width = _renderContext->Buffers->GetWidth();
     const int32 height = _renderContext->Buffers->GetHeight();
 
-    // Import input frame and depth buffer
-    _inputRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0); // TODO: Use actual input
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    // Read lighting result and depth buffer
+    _inputRef = builder.ReadTexture("LightBuffer", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
 
     // Create output frame
-    _outputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+    RenderGraphTextureDesc outputDesc = RenderGraphTextureDesc::Create2D(
         width, height,
         PixelFormat::R11G11B10_Float,
         GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget,
-        TEXT("ForwardOutput")));
+        TEXT("InputFrame"));
+    outputDesc.Flags |= RenderGraphResourceFlags::Exported;
+    _outputRef = builder.CreateTexture(outputDesc);
 
     // Create distortion buffer if needed
     auto& distortionList = _renderContext->List->DrawCallsLists[(int32)DrawCallsListType::Distortion];
@@ -199,7 +202,20 @@ void ForwardPass::Execute(GPUContext* context)
         return;
 
     // Use existing Render implementation
-    GPUTexture* input = _renderContext->Buffers->GBuffer0; // TODO: Get from builder
-    GPUTexture* output = _renderContext->Buffers->GBuffer0; // TODO: Get from builder
+    GPUTexture* input = _inputRef.GetTexture();
+    GPUTexture* output = _outputRef.GetTexture();
+    if (!input || !output)
+        return;
+
+    auto& forwardList = _renderContext->List->DrawCallsLists[(int32)DrawCallsListType::Forward];
+    auto& distortionList = _renderContext->List->DrawCallsLists[(int32)DrawCallsListType::Distortion];
+    if (forwardList.IsEmpty() && distortionList.IsEmpty())
+    {
+        context->SetViewportAndScissors((float)output->Width(), (float)output->Height());
+        context->SetRenderTarget(output->View());
+        context->Draw(input);
+        return;
+    }
+
     Render(*_renderContext, input, output);
 }

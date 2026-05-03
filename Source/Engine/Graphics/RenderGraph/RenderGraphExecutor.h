@@ -5,7 +5,7 @@
 #include "RenderGraphTypes.h"
 #include "Engine/Core/Collections/Array.h"
 #include "Engine/Core/Collections/Dictionary.h"
-#include "Engine/Graphics/GPUResourceState.h"
+#include "Engine/Graphics/GPUResourceAccess.h"
 
 // Forward declarations
 class RenderGraph;
@@ -30,7 +30,7 @@ public:
         /// <summary>
         /// Current GPU resource state.
         /// </summary>
-        GPUResourceState State;
+        GPUResourceAccess Access;
 
         /// <summary>
         /// Last pass that accessed this resource.
@@ -38,13 +38,13 @@ public:
         int32 LastAccessPass;
 
         ResourceState()
-            : State(GPUResourceState::Common)
+            : Access(GPUResourceAccess::None)
             , LastAccessPass(-1)
         {
         }
 
-        ResourceState(GPUResourceState state)
-            : State(state)
+        ResourceState(GPUResourceAccess access)
+            : Access(access)
             , LastAccessPass(-1)
         {
         }
@@ -149,7 +149,7 @@ private:
     /// <param name="texture">The texture to transition.</param>
     /// <param name="textureIndex">The texture resource index.</param>
     /// <param name="newState">The new state.</param>
-    void TransitionTexture(GPUContext* context, GPUTexture* texture, int32 textureIndex, GPUResourceState newState);
+    void TransitionTexture(GPUContext* context, GPUTexture* texture, int32 textureIndex, GPUResourceAccess newAccess);
 
     /// <summary>
     /// Transitions a buffer resource to a new state.
@@ -158,7 +158,7 @@ private:
     /// <param name="buffer">The buffer to transition.</param>
     /// <param name="bufferIndex">The buffer resource index.</param>
     /// <param name="newState">The new state.</param>
-    void TransitionBuffer(GPUContext* context, GPUBuffer* buffer, int32 bufferIndex, GPUResourceState newState);
+    void TransitionBuffer(GPUContext* context, GPUBuffer* buffer, int32 bufferIndex, GPUResourceAccess newAccess);
 
     /// <summary>
     /// Determines the required GPU resource state for a resource access.
@@ -166,7 +166,7 @@ private:
     /// <param name="access">The access mode.</param>
     /// <param name="isTexture">True if resource is a texture.</param>
     /// <returns>The required GPU resource state.</returns>
-    GPUResourceState GetRequiredState(RenderGraphResourceAccess access, bool isTexture) const;
+    GPUResourceAccess GetRequiredAccess(RenderGraphResourceAccess access, bool isTexture, bool isCompute) const;
 
     /// <summary>
     /// Inserts synchronization barriers between passes if needed.

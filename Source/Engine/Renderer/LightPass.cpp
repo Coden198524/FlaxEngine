@@ -437,6 +437,7 @@ void LightPass::RenderLights(RenderContextBatch& renderContextBatch, GPUTextureV
 
 void LightPass::Setup(RenderGraphBuilder& builder)
 {
+    _renderContextBatch = builder.GetRenderContextBatch();
     if (!_renderContextBatch)
         return;
 
@@ -444,19 +445,13 @@ void LightPass::Setup(RenderGraphBuilder& builder)
     const int32 width = renderContext.Buffers->GetWidth();
     const int32 height = renderContext.Buffers->GetHeight();
 
-    // Import GBuffer textures as inputs
-    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), renderContext.Buffers->GBuffer0);
-    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), renderContext.Buffers->GBuffer1);
-    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), renderContext.Buffers->GBuffer2);
-    _gbuffer3Ref = builder.ImportTexture(TEXT("GBuffer3"), renderContext.Buffers->GBuffer3);
-    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), renderContext.Buffers->DepthBuffer);
-
-    // Import or create light buffer
-    _lightBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
-        width, height, 
-        PixelFormat::R11G11B10_Float, 
-        GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, 
-        TEXT("LightBuffer")));
+    // Read GBuffer textures and write into the graph-owned light buffer
+    _gbuffer0Ref = builder.ReadTexture("GBuffer0", RenderGraphTextureAccess::SRV);
+    _gbuffer1Ref = builder.ReadTexture("GBuffer1", RenderGraphTextureAccess::SRV);
+    _gbuffer2Ref = builder.ReadTexture("GBuffer2", RenderGraphTextureAccess::SRV);
+    _gbuffer3Ref = builder.ReadTexture("GBuffer3", RenderGraphTextureAccess::SRV);
+    _depthBufferRef = builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
 
     // Import shadow resources
     GPUTexture* shadowMapAtlas = nullptr;
@@ -486,6 +481,6 @@ void LightPass::Execute(GPUContext* context)
 
     // Use existing RenderLights implementation
     auto& renderContext = _renderContextBatch->GetMainContext();
-    GPUTexture* lightBuffer = renderContext.Buffers->GBuffer0; // TODO: Get actual light buffer from builder
+    GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
     RenderLights(*_renderContextBatch, lightBuffer ? lightBuffer->View() : nullptr);
 }

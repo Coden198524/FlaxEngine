@@ -4,6 +4,7 @@
 #include "RenderGraph.h"
 #include "RenderGraphCompiler.h"
 #include "Engine/Graphics/GPUDevice.h"
+#include "Engine/Graphics/PixelFormatExtensions.h"
 #include "Engine/Graphics/Textures/GPUTexture.h"
 #include "Engine/Graphics/GPUBuffer.h"
 #include "Engine/Core/Log.h"
@@ -35,11 +36,9 @@ GPUTexture* RenderGraphResourceManager::AllocateTexture(const RenderGraphTexture
     const uint32 descHash = GetHash(gpuDesc);
 
     // Try to find a matching texture in the pool
-    PROFILE_CPU_NAMED("FindTexture");
     const int32 poolIndex = FindPooledTexture(gpuDesc, descHash);
     if (poolIndex >= 0)
     {
-        PROFILE_CPU_NAMED("ReuseTexture");
         auto& pooled = _texturePool[poolIndex];
         pooled.InUse = true;
         pooled.LastFrameUsed = Engine::FrameCount;
@@ -54,7 +53,6 @@ GPUTexture* RenderGraphResourceManager::AllocateTexture(const RenderGraphTexture
     }
 
     // Create a new texture
-    PROFILE_CPU_NAMED("CreateNewTexture");
     const String textureName = name.HasChars() ? name : String::Format(TEXT("RenderGraph_Texture_{0}"), _texturePool.Count());
     GPUTexture* texture = GPUDevice::Instance->CreateTexture(textureName);
     if (texture->Init(gpuDesc))
@@ -89,11 +87,9 @@ GPUBuffer* RenderGraphResourceManager::AllocateBuffer(const RenderGraphBufferDes
     const uint32 descHash = GetHash(gpuDesc);
 
     // Try to find a matching buffer in the pool
-    PROFILE_CPU_NAMED("FindBuffer");
     const int32 poolIndex = FindPooledBuffer(gpuDesc, descHash);
     if (poolIndex >= 0)
     {
-        PROFILE_CPU_NAMED("ReuseBuffer");
         auto& pooled = _bufferPool[poolIndex];
         pooled.InUse = true;
         pooled.LastFrameUsed = Engine::FrameCount;
@@ -108,7 +104,6 @@ GPUBuffer* RenderGraphResourceManager::AllocateBuffer(const RenderGraphBufferDes
     }
 
     // Create a new buffer
-    PROFILE_CPU_NAMED("CreateNewBuffer");
     const String bufferName = name.HasChars() ? name : String::Format(TEXT("RenderGraph_Buffer_{0}"), _bufferPool.Count());
     GPUBuffer* buffer = GPUDevice::Instance->CreateBuffer(bufferName);
     if (buffer->Init(gpuDesc))

@@ -130,7 +130,11 @@ void HistogramPass::Setup(RenderGraphBuilder& builder)
     _colorBufferRef = builder.ReadTexture("ColorBuffer", RenderGraphTextureAccess::SRV);
     
     // Declare output buffer resource
-    _histogramBufferRef = builder.WriteBuffer("HistogramBuffer", RenderGraphBufferAccess::UAV);
+    if (!checkIfSkipPass() && _histogramBuffer)
+    {
+        _histogramBufferRef = builder.ImportBuffer(TEXT("HistogramBuffer"), _histogramBuffer);
+        builder.Write(_histogramBufferRef);
+    }
 }
 
 void HistogramPass::Execute(GPUContext* context)

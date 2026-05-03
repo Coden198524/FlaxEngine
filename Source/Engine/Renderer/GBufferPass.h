@@ -11,6 +11,8 @@
 /// <summary>
 /// Rendering scene to the GBuffer
 /// </summary>
+struct Viewport;
+
 class GBufferPass : public RendererPass<GBufferPass>, public RenderGraphRasterPass
 {
 private:
@@ -89,7 +91,7 @@ public:
     }
     void PreOverrideDrawCalls(RenderContext& renderContext);
     void OverrideDrawCalls(RenderContext& renderContext);
-    void DrawMaterialComplexity(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer);
+    void DrawMaterialComplexity(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer, GPUTextureView* outputView = nullptr, const Viewport* outputViewport = nullptr);
 #endif
 
 public:

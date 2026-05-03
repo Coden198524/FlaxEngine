@@ -187,6 +187,11 @@ String DynamicDiffuseGlobalIlluminationPass::ToString() const
     return TEXT("DynamicDiffuseGlobalIlluminationPass");
 }
 
+DynamicDiffuseGlobalIlluminationPass::DynamicDiffuseGlobalIlluminationPass()
+    : RenderGraphComputePass(TEXT("DynamicDiffuseGlobalIlluminationPass"))
+{
+}
+
 bool DynamicDiffuseGlobalIlluminationPass::Init()
 {
     // Check platform support
@@ -851,23 +856,22 @@ bool DynamicDiffuseGlobalIlluminationPass::Render(RenderContext& renderContext, 
 
 void DynamicDiffuseGlobalIlluminationPass::Setup(RenderGraphBuilder& builder)
 {
-    // Declare output resources (probe textures)
-    builder.WriteTexture("DDGIProbesData", RenderGraphTextureAccess::UAV);
-    builder.WriteTexture("DDGIProbesDistance", RenderGraphTextureAccess::UAV);
-    builder.WriteTexture("DDGIProbesIrradiance", RenderGraphTextureAccess::UAV);
-    
-    // Declare dependencies on Global SDF and Global Surface Atlas
-    builder.ReadTexture("GlobalSDF", RenderGraphTextureAccess::SRV);
-    builder.ReadTexture("GlobalSDFMip", RenderGraphTextureAccess::SRV);
-    builder.ReadTexture("GlobalSurfaceAtlasDepth", RenderGraphTextureAccess::SRV);
-    builder.ReadTexture("GlobalSurfaceAtlasGBuffer0", RenderGraphTextureAccess::SRV);
-    builder.ReadTexture("GlobalSurfaceAtlasGBuffer1", RenderGraphTextureAccess::SRV);
-    builder.ReadTexture("GlobalSurfaceAtlasLighting", RenderGraphTextureAccess::SRV);
+    _renderContext = builder.GetRenderContext();
+    if (!_renderContext || !_renderContext->Buffers)
+        return;
+
+    builder.ReadTexture("GBuffer0", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GBuffer1", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GBuffer2", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("DepthBuffer", RenderGraphTextureAccess::SRV);
+    _lightBufferRef = builder.ReadWriteTexture("LightBuffer", RenderGraphTextureAccess::RTV);
 }
 
 void DynamicDiffuseGlobalIlluminationPass::Execute(GPUContext* context)
 {
-    // Execute method is called by RenderGraph during execution phase
-    // The actual rendering logic is handled by the Render method which is called
-    // from the main rendering pipeline with proper RenderContext
+    if (!_renderContext)
+        return;
+
+    GPUTexture* lightBuffer = _lightBufferRef.GetTexture();
+    Render(*_renderContext, context, lightBuffer ? lightBuffer->View() : nullptr);
 }
