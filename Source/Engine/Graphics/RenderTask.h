@@ -22,6 +22,7 @@ struct RenderContext;
 class Camera;
 class Actor;
 class Scene;
+class RenderGraphBuilder;
 
 /// <summary>
 /// Allows to perform custom rendering using graphics pipeline.
@@ -478,6 +479,11 @@ API_STRUCT(NoDefault) struct FLAXENGINE_API RenderContext
     /// The render view.
     /// </summary>
     API_FIELD() RenderView View;
+
+    /// <summary>
+    /// The RenderGraph builder for declaring resources during pass setup (optional, only valid during RenderGraph pass setup).
+    /// </summary>
+    RenderGraphBuilder* GraphBuilder = nullptr;
 
     /// <summary>
     /// The GPU access locking critical section to protect data access when performing multi-threaded rendering.

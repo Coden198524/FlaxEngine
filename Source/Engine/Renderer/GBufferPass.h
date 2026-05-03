@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #if USE_EDITOR
 #include "Engine/Core/Collections/Dictionary.h"
 #endif
@@ -10,7 +11,7 @@
 /// <summary>
 /// Rendering scene to the GBuffer
 /// </summary>
-class GBufferPass : public RendererPass<GBufferPass>
+class GBufferPass : public RendererPass<GBufferPass>, public RenderGraphRasterPass
 {
 private:
 
@@ -26,7 +27,21 @@ private:
     class MaterialComplexityMaterialShader* _materialComplexity = nullptr;
 #endif
 
+    // RenderGraph resources
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _gbuffer0Ref;
+    RenderGraphTextureRef _gbuffer1Ref;
+    RenderGraphTextureRef _gbuffer2Ref;
+    RenderGraphTextureRef _gbuffer3Ref;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GBufferPass"/> class.
+    /// </summary>
+    GBufferPass();
 
     /// <summary>
     /// Fill GBuffer
@@ -34,6 +49,10 @@ public:
     /// <param name="renderContext">The rendering context.</param>
     /// <param name="lightBuffer">Light buffer to output material emissive light and precomputed indirect lighting</param>
     void Fill(RenderContext& renderContext, GPUTexture* lightBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
     /// <summary>
     /// Render debug view

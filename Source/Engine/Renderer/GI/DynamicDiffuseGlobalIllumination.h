@@ -3,13 +3,14 @@
 #pragma once
 
 #include "../RendererPass.h"
+#include "../RenderGraph.h"
 #include "Engine/Core/Math/Int4.h"
 #include "Engine/Graphics/Textures/GPUTexture.h"
 
 /// <summary>
 /// Dynamic Diffuse Global Illumination rendering pass.
 /// </summary>
-class FLAXENGINE_API DynamicDiffuseGlobalIlluminationPass : public RendererPass<DynamicDiffuseGlobalIlluminationPass>
+class FLAXENGINE_API DynamicDiffuseGlobalIlluminationPass : public RendererPass<DynamicDiffuseGlobalIlluminationPass>, public RenderGraphComputePass
 {
 public:
     // Constant buffer data for DDGI access on a GPU.
@@ -71,6 +72,10 @@ public:
     /// <param name="lightBuffer">The light accumulation buffer (input and output).</param>
     /// <returns>True if failed to render (platform doesn't support it, out of video memory, disabled feature or effect is not ready), otherwise false.</returns>
     bool Render(RenderContext& renderContext, GPUContext* context, GPUTextureView* lightBuffer);
+
+    // [RenderGraphComputePass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 #if COMPILE_WITH_DEV_ENV

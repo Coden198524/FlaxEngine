@@ -4,6 +4,7 @@
 #include "GBufferPass.h"
 #include "Renderer.h"
 #include "RenderList.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Core/Config/GraphicsSettings.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Content.h"
@@ -37,7 +38,8 @@ GPU_CB_STRUCT(Data {
     });
 
 MotionBlurPass::MotionBlurPass()
-    : _motionVectorsFormat(PixelFormat::Unknown)
+    : RenderGraphComputePass(TEXT("MotionBlurPass"))
+    , _motionVectorsFormat(PixelFormat::Unknown)
 {
 }
 
@@ -380,3 +382,36 @@ void MotionBlurPass::Render(RenderContext& renderContext, GPUTexture*& frame, GP
     context->ResetRenderTarget();
     Swap(frame, tmp);
 }
+
+void MotionBlurPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare input dependencies: depth, velocity buffers, and input frame
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    _velocityBufferRef = builder.ImportTexture(TEXT("MotionVectors"), _renderContext->Buffers->MotionVectors);
+    _inputFrameRef = builder.ImportTexture(TEXT("InputFrame"), _renderContext->Buffers->GBuffer0);
+    
+    // Declare reads
+    ReadTexture(_depthBufferRef);
+    ReadTexture(_velocityBufferRef);
+    ReadTexture(_inputFrameRef);
+    
+    // Create output frame texture
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+    _outputFrameRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("MotionBlur_Output")));
+    
+    // Declare write
+    WriteTexture(_outputFrameRef);
+}
+
+void MotionBlurPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    // Execute the existing Render logic
+    GPUTexture* frame = _renderContext->Buffers->GBuffer0;
+    GPUTexture* tmp = nullptr;
+    Render(*_renderContext, frame, tmp);
+}
+

@@ -4,6 +4,7 @@
 
 #include "Engine/Graphics/RenderView.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "RendererPass.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Assets/Model.h"
@@ -11,7 +12,7 @@
 /// <summary>
 /// Lighting rendering service. Handles dynamic lights diffuse and specular color calculations.
 /// </summary>
-class LightPass : public RendererPass<LightPass>
+class LightPass : public RendererPass<LightPass>, public RenderGraphRasterPass
 {
 private:
     AssetReference<Shader> _shader;
@@ -27,7 +28,22 @@ private:
     PixelFormat _shadowMaskFormat;
     bool _depthBounds = false;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _lightBufferRef;
+    RenderGraphTextureRef _gbuffer0Ref;
+    RenderGraphTextureRef _gbuffer1Ref;
+    RenderGraphTextureRef _gbuffer2Ref;
+    RenderGraphTextureRef _gbuffer3Ref;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _shadowMapAtlasRef;
+    RenderGraphBufferRef _shadowsBufferRef;
+    RenderContextBatch* _renderContextBatch = nullptr;
+
 public:
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LightPass"/> class.
+    /// </summary>
+    LightPass();
     /// <summary>
     /// Setups the lights rendering for batched scene drawing.
     /// </summary>
@@ -39,6 +55,10 @@ public:
     /// <param name="renderContextBatch">The rendering context batch.</param>
     /// <param name="lightBuffer">The light accumulation buffer (input and output).</param>
     void RenderLights(RenderContextBatch& renderContextBatch, GPUTextureView* lightBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 #if COMPILE_WITH_DEV_ENV

@@ -16,6 +16,10 @@ struct AtmosphereCache
 
 /// <summary>
 /// PBR atmosphere cache data rendering service.
+/// Note: This is an independent precomputation service that runs asynchronously
+/// and caches results across multiple frames. It does not need to be integrated
+/// into the RenderGraph architecture as it's not part of the per-frame rendering pipeline.
+/// Other passes can access the precomputed data via GetCache().
 /// </summary>
 class FLAXENGINE_API AtmospherePreCompute
 {

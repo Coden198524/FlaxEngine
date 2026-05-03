@@ -8,7 +8,7 @@
 /// <summary>
 /// Global Sign Distance Field (SDF) rendering pass. Composites scene geometry into series of 3D volume textures that cover the world around the camera for global distance field sampling.
 /// </summary>
-class FLAXENGINE_API GlobalSignDistanceFieldPass : public RendererPass<GlobalSignDistanceFieldPass>
+class FLAXENGINE_API GlobalSignDistanceFieldPass : public RendererPass<GlobalSignDistanceFieldPass>, public RenderGraphComputePass
 {
 public:
     // Constant buffer data for Global SDF access on a GPU.
@@ -74,6 +74,10 @@ public:
     /// <param name="context">The GPU context.</param>
     /// <param name="output">The output buffer.</param>
     void RenderDebug(RenderContext& renderContext, GPUContext* context, GPUTexture* output);
+
+    // [RenderGraphComputePass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
     void GetCullingData(BoundingBox& bounds) const;
 

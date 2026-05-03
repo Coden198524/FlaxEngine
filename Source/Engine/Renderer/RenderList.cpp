@@ -605,6 +605,7 @@ void RenderList::Clear()
     _instanceBuffer.Clear();
     ObjectBuffer.Clear();
     TempObjectBuffer.Clear();
+    GraphBuilder = nullptr;
     Memory.Free();
 }
 

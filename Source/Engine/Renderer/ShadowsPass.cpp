@@ -8,6 +8,7 @@
 #include "Engine/Graphics/RenderTask.h"
 #include "Engine/Graphics/RenderBuffers.h"
 #include "Engine/Graphics/PixelFormatExtensions.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Content/Content.h"
 #include "Engine/Engine/Engine.h"
 #include "Engine/Engine/Units.h"
@@ -458,6 +459,11 @@ void ShadowAtlasLightTile::FreeStatic(ShadowsCustomBuffer* buffer)
         buffer->StaticAtlas.Free(StaticRectTile, buffer);
         StaticRectTile = nullptr;
     }
+}
+
+ShadowsPass::ShadowsPass()
+    : RenderGraphRasterPass(TEXT("ShadowsPass"))
+{
 }
 
 String ShadowsPass::ToString() const
@@ -1707,4 +1713,56 @@ void ShadowsPass::GetShadowAtlas(const RenderBuffers* renderBuffers, GPUTexture*
         shadowMapAtlas = nullptr;
         shadowsBuffer = nullptr;
     }
+}
+
+void ShadowsPass::Setup(RenderGraphBuilder& builder)
+{
+    if (!_renderContext || !_renderContextBatch)
+        return;
+
+    // Determine shadow atlas resolution
+    int32 atlasResolution = 2048;
+    switch (Graphics::ShadowMapsQuality)
+    {
+    case Quality::Low:
+        atlasResolution = 1024;
+        break;
+    case Quality::Medium:
+        atlasResolution = 2048;
+        break;
+    case Quality::High:
+        atlasResolution = 4096;
+        break;
+    case Quality::Ultra:
+        atlasResolution = 8192;
+        break;
+    }
+
+    // Create shadow map atlas
+    _shadowMapAtlasRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+        atlasResolution, atlasResolution, 
+        _shadowMapFormat, 
+        GPUTextureFlags::ShaderResource | GPUTextureFlags::DepthStencil, 
+        TEXT("ShadowMapAtlas")));
+
+    // Create static shadow map atlas (2x resolution)
+    const int32 staticAtlasResolution = Math::Min(atlasResolution * 2, 8192);
+    _staticShadowMapAtlasRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+        staticAtlasResolution, staticAtlasResolution,
+        _shadowMapFormat,
+        GPUTextureFlags::ShaderResource | GPUTextureFlags::DepthStencil,
+        TEXT("StaticShadowMapAtlas")));
+
+    // Declare outputs
+    WriteTexture(_shadowMapAtlasRef);
+    WriteTexture(_staticShadowMapAtlasRef);
+}
+
+void ShadowsPass::Execute(GPUContext* context)
+{
+    if (!_renderContext || !_renderContextBatch)
+        return;
+
+    // Use existing RenderShadowMaps implementation
+    RenderShadowMaps(*_renderContextBatch);
 }

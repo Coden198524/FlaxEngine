@@ -1228,3 +1228,17 @@ void GlobalSignDistanceFieldPass::RasterizeHeightfield(Actor* actor, GPUTexture*
         cascade.PendingSDFTextures.Add(heightfield);
     }
 }
+
+void GlobalSignDistanceFieldPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare output resources (3D volume textures for SDF cascades)
+    builder.WriteTexture("GlobalSDF", RenderGraphTextureAccess::UAV);
+    builder.WriteTexture("GlobalSDFMip", RenderGraphTextureAccess::UAV);
+}
+
+void GlobalSignDistanceFieldPass::Execute(GPUContext* context)
+{
+    // Execute method is called by RenderGraph during execution phase
+    // The actual rendering logic is handled by the Render method which is called
+    // from the main rendering pipeline with proper RenderContext
+}

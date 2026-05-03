@@ -1,0 +1,384 @@
+// Copyright (c) Wojciech Figat. All rights reserved.
+
+#include "RenderGraph.h"
+#include "RenderGraphPass.h"
+#include "RenderGraphCompiler.h"
+#include "RenderGraphExecutor.h"
+#include "RenderGraphResourceManager.h"
+#include "Engine/Graphics/GPUContext.h"
+#include "Engine/Graphics/Textures/GPUTexture.h"
+#include "Engine/Graphics/GPUBuffer.h"
+#include "Engine/Core/Log.h"
+#include "Engine/Profiler/ProfilerCPU.h"
+
+RenderGraph::RenderGraph()
+    : _compiler(nullptr)
+    , _executor(nullptr)
+    , _resourceManager(nullptr)
+    , _compiled(false)
+    , _building(false)
+{
+    _compiler = New<RenderGraphCompiler>();
+    _executor = New<RenderGraphExecutor>();
+    _resourceManager = New<RenderGraphResourceManager>(this);
+}
+
+RenderGraph::~RenderGraph()
+{
+    Clear();
+    
+    if (_compiler)
+    {
+        Delete(_compiler);
+        _compiler = nullptr;
+    }
+    
+    if (_executor)
+    {
+        Delete(_executor);
+        _executor = nullptr;
+    }
+    
+    if (_resourceManager)
+    {
+        Delete(_resourceManager);
+        _resourceManager = nullptr;
+    }
+}
+
+int32 RenderGraph::AddPass(RenderGraphPass* pass)
+{
+    if (!pass)
+        return -1;
+
+    // Assign pass index
+    pass->_passIndex = _passes.Count();
+    
+    // Add to pass list
+    _passes.Add(pass);
+    
+    // Mark as not compiled
+    _compiled = false;
+    
+    return pass->_passIndex;
+}
+
+bool RenderGraph::Compile()
+{
+    PROFILE_CPU_NAMED("RenderGraph.Compile");
+
+    if (_passes.IsEmpty())
+    {
+        LOG(Warning, "RenderGraph::Compile: No passes to compile");
+        return false;
+    }
+
+    // Build dependencies by calling Setup on all passes
+    {
+        PROFILE_CPU_NAMED("RenderGraph.BuildDependencies");
+        BuildDependencies();
+    }
+
+    // Compile the graph (pass culling, topological sort, resource lifetime analysis)
+    {
+        PROFILE_CPU_NAMED("RenderGraph.CompilerPass");
+        if (!_compiler->Compile(this))
+        {
+            LOG(Error, "RenderGraph::Compile: Compilation failed");
+            return false;
+        }
+    }
+
+    // Allocate physical resources
+    {
+        PROFILE_CPU_NAMED("RenderGraph.AllocateResources");
+        AllocateResources();
+    }
+
+    _compiled = true;
+    return true;
+}
+
+bool RenderGraph::Execute(GPUContext* context)
+{
+    if (!context)
+    {
+        LOG(Error, "RenderGraph::Execute: Invalid GPU context");
+        return false;
+    }
+
+    if (!_compiled)
+    {
+        LOG(Error, "RenderGraph::Execute: Graph not compiled");
+        return false;
+    }
+
+    PROFILE_CPU_NAMED("RenderGraph.Execute");
+
+    // Execute the graph
+    if (!_executor->Execute(this, _compiler, context))
+    {
+        LOG(Error, "RenderGraph::Execute: Execution failed");
+        return false;
+    }
+
+    return true;
+}
+
+void RenderGraph::Clear()
+{
+    // Release all allocated resources
+    ReleaseResources();
+
+    // Delete all passes
+    for (int32 i = 0; i < _passes.Count(); i++)
+    {
+        if (_passes[i])
+            Delete(_passes[i]);
+    }
+    _passes.Clear();
+
+    // Clear resource lists
+    _textures.Clear();
+    _buffers.Clear();
+
+    // Clear compiler and executor state
+    if (_compiler)
+        _compiler->Clear();
+    if (_executor)
+        _executor->Clear();
+    if (_resourceManager)
+        _resourceManager->Clear();
+
+    _compiled = false;
+    _building = false;
+}
+
+RenderGraphTextureRef RenderGraph::CreateTexture(const RenderGraphTextureDesc& desc)
+{
+    TextureResource resource;
+    resource.Desc = desc;
+    resource.Texture = nullptr;
+    resource.ProducerPass = -1;
+    resource.IsImported = false;
+
+    int32 index = _textures.Count();
+    _textures.Add(resource);
+
+    return RenderGraphTextureRef(index);
+}
+
+RenderGraphTextureRef RenderGraph::ImportTexture(const String& name, GPUTexture* texture)
+{
+    if (!texture)
+        return RenderGraphTextureRef();
+
+    TextureResource resource;
+    resource.Desc.Name = name;
+    resource.Desc.Desc = texture->GetDescription();
+    resource.Desc.Flags = RenderGraphResourceFlags::Imported;
+    resource.Texture = texture;
+    resource.ProducerPass = -1;
+    resource.IsImported = true;
+
+    int32 index = _textures.Count();
+    _textures.Add(resource);
+
+    return RenderGraphTextureRef(index);
+}
+
+RenderGraphBufferRef RenderGraph::CreateBuffer(const RenderGraphBufferDesc& desc)
+{
+    BufferResource resource;
+    resource.Desc = desc;
+    resource.Buffer = nullptr;
+    resource.ProducerPass = -1;
+    resource.IsImported = false;
+
+    int32 index = _buffers.Count();
+    _buffers.Add(resource);
+
+    return RenderGraphBufferRef(index);
+}
+
+RenderGraphBufferRef RenderGraph::ImportBuffer(const String& name, GPUBuffer* buffer)
+{
+    if (!buffer)
+        return RenderGraphBufferRef();
+
+    BufferResource resource;
+    resource.Desc.Name = name;
+    resource.Desc.Desc = buffer->GetDescription();
+    resource.Desc.Flags = RenderGraphResourceFlags::Imported;
+    resource.Buffer = buffer;
+    resource.ProducerPass = -1;
+    resource.IsImported = true;
+
+    int32 index = _buffers.Count();
+    _buffers.Add(resource);
+
+    return RenderGraphBufferRef(index);
+}
+
+GPUTexture* RenderGraph::GetTexture(RenderGraphTextureRef handle)
+{
+    if (!handle.IsValid() || handle.Index >= _textures.Count())
+        return nullptr;
+
+    return _textures[handle.Index].Texture;
+}
+
+GPUBuffer* RenderGraph::GetBuffer(RenderGraphBufferRef handle)
+{
+    if (!handle.IsValid() || handle.Index >= _buffers.Count())
+        return nullptr;
+
+    return _buffers[handle.Index].Buffer;
+}
+
+void RenderGraph::BuildDependencies()
+{
+    _building = true;
+
+    // Call Setup on all passes to declare their resource dependencies
+    for (int32 i = 0; i < _passes.Count(); i++)
+    {
+        RenderGraphPass* pass = _passes[i];
+        if (!pass)
+            continue;
+
+        // Clear previous dependencies
+        pass->_textureReads.Clear();
+        pass->_textureWrites.Clear();
+        pass->_bufferReads.Clear();
+        pass->_bufferWrites.Clear();
+        pass->_culled = false;
+
+        // Call Setup to declare dependencies
+        pass->Setup(*this);
+    }
+
+    // Determine producer passes for each resource
+    for (int32 i = 0; i < _passes.Count(); i++)
+    {
+        RenderGraphPass* pass = _passes[i];
+        if (!pass)
+            continue;
+
+        // Mark this pass as producer for all textures it writes
+        for (int32 j = 0; j < pass->_textureWrites.Count(); j++)
+        {
+            int32 texIndex = pass->_textureWrites[j].Index;
+            if (texIndex >= 0 && texIndex < _textures.Count())
+            {
+                // First writer becomes the producer
+                if (_textures[texIndex].ProducerPass == -1)
+                    _textures[texIndex].ProducerPass = i;
+            }
+        }
+
+        // Mark this pass as producer for all buffers it writes
+        for (int32 j = 0; j < pass->_bufferWrites.Count(); j++)
+        {
+            int32 bufIndex = pass->_bufferWrites[j].Index;
+            if (bufIndex >= 0 && bufIndex < _buffers.Count())
+            {
+                // First writer becomes the producer
+                if (_buffers[bufIndex].ProducerPass == -1)
+                    _buffers[bufIndex].ProducerPass = i;
+            }
+        }
+    }
+
+    _building = false;
+}
+
+void RenderGraph::AllocateResources()
+{
+    if (!_resourceManager)
+        return;
+
+    PROFILE_CPU_NAMED("RenderGraph.AllocateResources");
+
+    // Allocate textures
+    for (int32 i = 0; i < _textures.Count(); i++)
+    {
+        TextureResource& resource = _textures[i];
+
+        // Skip imported resources (already have GPU texture)
+        if (resource.IsImported)
+            continue;
+
+        // Skip if already allocated
+        if (resource.Texture)
+            continue;
+
+        // Get lifetime information from compiler
+        const auto& lifetime = _compiler->GetTextureLifetime(i);
+        
+        // Skip resources that are never used
+        if (lifetime.FirstUse == -1 || lifetime.LastUse == -1)
+            continue;
+
+        // Allocate texture from resource manager
+        resource.Texture = _resourceManager->AllocateTexture(resource.Desc, lifetime);
+    }
+
+    // Allocate buffers
+    for (int32 i = 0; i < _buffers.Count(); i++)
+    {
+        BufferResource& resource = _buffers[i];
+
+        // Skip imported resources (already have GPU buffer)
+        if (resource.IsImported)
+            continue;
+
+        // Skip if already allocated
+        if (resource.Buffer)
+            continue;
+
+        // Get lifetime information from compiler
+        const auto& lifetime = _compiler->GetBufferLifetime(i);
+        
+        // Skip resources that are never used
+        if (lifetime.FirstUse == -1 || lifetime.LastUse == -1)
+            continue;
+
+        // Allocate buffer from resource manager
+        resource.Buffer = _resourceManager->AllocateBuffer(resource.Desc, lifetime);
+    }
+}
+
+void RenderGraph::ReleaseResources()
+{
+    if (!_resourceManager)
+        return;
+
+    // Release textures (but not imported ones)
+    for (int32 i = 0; i < _textures.Count(); i++)
+    {
+        TextureResource& resource = _textures[i];
+        
+        if (resource.Texture && !resource.IsImported)
+        {
+            _resourceManager->ReleaseTexture(resource.Texture);
+            resource.Texture = nullptr;
+        }
+    }
+
+    // Release buffers (but not imported ones)
+    for (int32 i = 0; i < _buffers.Count(); i++)
+    {
+        BufferResource& resource = _buffers[i];
+        
+        if (resource.Buffer && !resource.IsImported)
+        {
+            _resourceManager->ReleaseBuffer(resource.Buffer);
+            resource.Buffer = nullptr;
+        }
+    }
+
+    // Release unused resources from the pool
+    if (_resourceManager)
+        _resourceManager->ReleaseUnusedResources();
+}

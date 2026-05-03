@@ -4,6 +4,7 @@
 
 #include "RendererPass.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 struct VolumetricFogOptions;
 struct RenderSpotLightData;
@@ -12,7 +13,7 @@ struct RenderPointLightData;
 /// <summary>
 /// Volumetric fog rendering service.
 /// </summary>
-class VolumetricFogPass : public RendererPass<VolumetricFogPass>
+class VolumetricFogPass : public RendererPass<VolumetricFogPass>, public RenderGraphComputePass
 {
 public:
     // Data used by particle material for rasterization into Volumetric Fog buffers (see VolumeParticleMaterialShader)
@@ -35,12 +36,21 @@ private:
     GPUBuffer* _ibCircleRasterize = nullptr;
     bool _isSupported = false;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _volumetricFogRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
     /// <summary>
     /// Renders the volumetric fog (generates integrated light scattering 3D texture). Does nothing if feature is disabled or not supported.
     /// </summary>
     /// <param name="renderContext">The rendering context.</param>
     void Render(RenderContext& renderContext);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
     bool Init(struct FrameCache& cache, RenderContext& renderContext, GPUContext* context);

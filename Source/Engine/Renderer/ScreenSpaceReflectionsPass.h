@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
 #include "Engine/Content/Assets/Model.h"
 #include "Engine/Content/Assets/Shader.h"
@@ -23,7 +24,7 @@
 /// 5) Combine final image (alpha blend into reflections buffer)
 /// </remarks>
 /// <seealso cref="RendererPass{ScreenSpaceReflectionsPass}" />
-class ScreenSpaceReflectionsPass : public RendererPass<ScreenSpaceReflectionsPass>
+class ScreenSpaceReflectionsPass : public RendererPass<ScreenSpaceReflectionsPass>, public RenderGraphComputePass
 {
 private:
     GPUPipelineStatePermutationsPs<2> _psRayTracePass;
@@ -32,6 +33,14 @@ private:
     GPUPipelineState* _psTemporalPass = nullptr;
     AssetReference<Shader> _shader;
     AssetReference<Texture> _preIntegratedGF;
+
+    // RenderGraph resources
+    RenderGraphTextureRef _gbuffer0Ref;
+    RenderGraphTextureRef _gbuffer1Ref;
+    RenderGraphTextureRef _gbuffer2Ref;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderGraphTextureRef _ssrOutputRef;
+    RenderContext* _renderContext = nullptr;
 
 public:
     /// <summary>
@@ -42,6 +51,10 @@ public:
     /// <param name="lightBuffer">Light buffer</param>
     /// <remarks>Result buffer with SSR contents to mix (null if not rendered). Free via RenderTargetPool after use.</remarks>
     GPUTexture* Render(RenderContext& renderContext, GPUTextureView* reflectionsRT, GPUTextureView* lightBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 #if COMPILE_WITH_DEV_ENV

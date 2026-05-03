@@ -27,6 +27,15 @@
 #include "Engine/Scripting/ScriptingObjectReference.h"
 #include "Engine/Threading/ThreadPoolTask.h"
 
+// NOTE: ProbesRenderer is an independent baking service that runs asynchronously in the background.
+// It does NOT need to be integrated into the RenderGraph architecture because:
+// 1. It's not part of the per-frame rendering pipeline
+// 2. It handles environment probe and sky light baking with its own scheduling and timeout logic
+// 3. Probes are baked on-demand and cached for later use
+// 4. It uses its own SceneRenderTask for rendering cubemap faces
+// 5. The baking process can span multiple frames with work distribution
+// The baked probe data is stored in actor properties and accessed directly by lighting passes.
+
 // Amount of frames to wait for data from probe update job
 #define PROBES_RENDERER_LATENCY_FRAMES 1
 

@@ -271,3 +271,25 @@ GPUTexture* ColorGradingPass::RenderLUT(RenderContext& renderContext)
 
     return colorGradingBuffer.LUT;
 }
+
+void ColorGradingPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare output resource
+    _lutOutputRef = builder.WriteTexture("ColorGradingLUT", RenderGraphTextureAccess::RTV);
+}
+
+void ColorGradingPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    RenderContext& renderContext = *_renderContext;
+    
+    // Execute the actual LUT rendering logic
+    GPUTexture* lut = RenderLUT(renderContext);
+    
+    // The LUT is cached in RenderBuffers, so we don't need to do anything else here
+}

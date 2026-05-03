@@ -6,6 +6,7 @@
 #include "Engine/Graphics/GPUContext.h"
 #include "Engine/Graphics/RenderTargetPool.h"
 #include "Engine/Graphics/RenderBuffers.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Renderer/RenderList.h"
 #include "Engine/Renderer/GBufferPass.h"
 #include "Engine/Engine/Engine.h"
@@ -151,3 +152,47 @@ void TAA::Render(const RenderContext& renderContext, GPUTexture* input, GPUTextu
     // Mark TAA jitter as resolved for future drawing
     (bool&)renderContext.View.IsTaaResolved = true;
 }
+
+void TAA::Setup(RenderGraphBuilder& builder)
+{
+    // Import input textures
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    _motionVectorsRef = builder.ImportTexture(TEXT("MotionVectors"), _renderContext->Buffers->MotionVectors);
+    
+    // Declare reads
+    builder.Read(_depthBufferRef);
+    builder.Read(_motionVectorsRef);
+    
+    // Import or create history buffer
+    if (_renderContext->Buffers->TemporalAA)
+    {
+        _historyRef = builder.ImportTexture(TEXT("TAA_History"), _renderContext->Buffers->TemporalAA);
+        builder.Read(_historyRef);
+    }
+    
+    // Create output texture
+    const int32 width = _input ? _input->Width() : _renderContext->Buffers->GetWidth();
+    const int32 height = _input ? _input->Height() : _renderContext->Buffers->GetHeight();
+    const PixelFormat format = _input ? _input->Format() : PixelFormat::R11G11B10_Float;
+    
+    RenderGraphTextureDesc outputDesc;
+    outputDesc.Width = width;
+    outputDesc.Height = height;
+    outputDesc.Format = format;
+    outputDesc.Flags = GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget;
+    
+    _outputRef = builder.CreateTexture(outputDesc);
+    
+    // Declare write
+    builder.Write(_outputRef);
+}
+
+void TAA::Execute(RenderGraphBuilder& builder, GPUContext* context)
+{
+    if (!_renderContext || !_input || !_output)
+        return;
+    
+    // Execute the existing Render logic
+    Render(*_renderContext, _input, _output);
+}
+

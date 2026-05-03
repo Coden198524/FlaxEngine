@@ -248,11 +248,44 @@ int32 CalculateBloomMipCount(int32 width, int32 height)
     return mipCount;
 }
 
-void PostProcessingPass::Render(RenderContext& renderContext, GPUTexture* input, GPUTexture* output, GPUTexture* colorGradingLUT)
+void PostProcessingPass::Setup(RenderGraphBuilder& builder)
+{
+    // Store render context for Execute
+    _renderContext = builder.GetRenderContext();
+    
+    // Declare input resources
+    _inputRef = builder.ReadTexture("InputFrame", RenderGraphTextureAccess::SRV);
+    _colorGradingLUTRef = builder.ReadTexture("ColorGradingLUT", RenderGraphTextureAccess::SRV);
+    
+    // Declare output resource
+    _outputRef = builder.WriteTexture("OutputFrame", RenderGraphTextureAccess::RTV);
+}
+
+void PostProcessingPass::Execute(GPUContext* context)
 {
     PROFILE_GPU_CPU("Post Processing");
+    
+    if (!_renderContext)
+        return;
+    
+    RenderContext& renderContext = *_renderContext;
     auto device = GPUDevice::Instance;
-    auto context = device->GetMainContext();
+    
+    // Get actual GPU textures from RenderGraph references
+    GPUTexture* input = _inputRef.GetTexture();
+    GPUTexture* output = _outputRef.GetTexture();
+    GPUTexture* colorGradingLUT = _colorGradingLUTRef.IsValid() ? _colorGradingLUTRef.GetTexture() : nullptr;
+    
+    if (!input || !output)
+        return;
+    
+    // Execute the actual rendering logic
+    RenderInternal(renderContext, context, input, output, colorGradingLUT);
+}
+
+void PostProcessingPass::RenderInternal(RenderContext& renderContext, GPUContext* context, GPUTexture* input, GPUTexture* output, GPUTexture* colorGradingLUT)
+{
+    auto device = GPUDevice::Instance;
     auto& view = renderContext.View;
 
     context->ResetRenderTarget();
@@ -561,4 +594,11 @@ void PostProcessingPass::Render(RenderContext& renderContext, GPUTexture* input,
     // Cleanup
     RenderTargetPool::Release(bloomBuffer1);
     RenderTargetPool::Release(bloomBuffer2);
+}
+
+void PostProcessingPass::Render(RenderContext& renderContext, GPUTexture* input, GPUTexture* output, GPUTexture* colorGradingLUT)
+{
+    auto device = GPUDevice::Instance;
+    auto context = device->GetMainContext();
+    RenderInternal(renderContext, context, input, output, colorGradingLUT);
 }

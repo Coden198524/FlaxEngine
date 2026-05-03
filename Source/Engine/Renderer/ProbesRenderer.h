@@ -9,6 +9,10 @@ class Actor;
 
 /// <summary>
 /// Probes rendering service
+/// Note: This is an independent baking service that runs asynchronously in the background.
+/// It handles environment probe and sky light baking with its own scheduling and timeout logic.
+/// It does not need to be integrated into the RenderGraph architecture as it's not part of
+/// the per-frame rendering pipeline. Probes are baked on-demand and cached.
 /// </summary>
 class ProbesRenderer
 {

@@ -10,6 +10,7 @@
 #include "Engine/Graphics/GPULimits.h"
 #include "Engine/Graphics/GPUContext.h"
 #include "Engine/Graphics/RenderTargetPool.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Content/Assets/CubeTexture.h"
 #include "Engine/Content/Content.h"
 
@@ -21,6 +22,11 @@ GPU_CB_STRUCT(PerLight {
 GPU_CB_STRUCT(PerFrame {
     ShaderGBufferData GBuffer;
     });
+
+LightPass::LightPass()
+    : RenderGraphRasterPass(TEXT("LightPass"))
+{
+}
 
 String LightPass::ToString() const
 {
@@ -427,4 +433,59 @@ void LightPass::RenderLights(RenderContextBatch& renderContextBatch, GPUTextureV
     context->ResetRenderTarget();
     context->ResetSR();
     context->ResetCB();
+}
+
+void LightPass::Setup(RenderGraphBuilder& builder)
+{
+    if (!_renderContextBatch)
+        return;
+
+    auto& renderContext = _renderContextBatch->GetMainContext();
+    const int32 width = renderContext.Buffers->GetWidth();
+    const int32 height = renderContext.Buffers->GetHeight();
+
+    // Import GBuffer textures as inputs
+    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), renderContext.Buffers->GBuffer0);
+    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), renderContext.Buffers->GBuffer1);
+    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), renderContext.Buffers->GBuffer2);
+    _gbuffer3Ref = builder.ImportTexture(TEXT("GBuffer3"), renderContext.Buffers->GBuffer3);
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), renderContext.Buffers->DepthBuffer);
+
+    // Import or create light buffer
+    _lightBufferRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(
+        width, height, 
+        PixelFormat::R11G11B10_Float, 
+        GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, 
+        TEXT("LightBuffer")));
+
+    // Import shadow resources
+    GPUTexture* shadowMapAtlas = nullptr;
+    GPUBufferView* shadowsBuffer = nullptr;
+    ShadowsPass::GetShadowAtlas(renderContext.Buffers, shadowMapAtlas, shadowsBuffer);
+    if (shadowMapAtlas)
+        _shadowMapAtlasRef = builder.ImportTexture(TEXT("ShadowMapAtlas"), shadowMapAtlas);
+
+    // Declare dependencies
+    ReadTexture(_gbuffer0Ref);
+    ReadTexture(_gbuffer1Ref);
+    ReadTexture(_gbuffer2Ref);
+    ReadTexture(_gbuffer3Ref);
+    ReadTexture(_depthBufferRef);
+    if (_shadowMapAtlasRef.IsValid())
+        ReadTexture(_shadowMapAtlasRef);
+
+    // Declare output
+    SetRenderTarget(0, _lightBufferRef);
+    SetDepthStencil(_depthBufferRef, true); // Read-only depth
+}
+
+void LightPass::Execute(GPUContext* context)
+{
+    if (!_renderContextBatch)
+        return;
+
+    // Use existing RenderLights implementation
+    auto& renderContext = _renderContextBatch->GetMainContext();
+    GPUTexture* lightBuffer = renderContext.Buffers->GBuffer0; // TODO: Get actual light buffer from builder
+    RenderLights(*_renderContextBatch, lightBuffer ? lightBuffer->View() : nullptr);
 }

@@ -848,3 +848,26 @@ bool DynamicDiffuseGlobalIlluminationPass::Render(RenderContext& renderContext, 
     context->SetViewportAndScissors(renderContext.View.ScreenSize.X, renderContext.View.ScreenSize.Y);
     return false;
 }
+
+void DynamicDiffuseGlobalIlluminationPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare output resources (probe textures)
+    builder.WriteTexture("DDGIProbesData", RenderGraphTextureAccess::UAV);
+    builder.WriteTexture("DDGIProbesDistance", RenderGraphTextureAccess::UAV);
+    builder.WriteTexture("DDGIProbesIrradiance", RenderGraphTextureAccess::UAV);
+    
+    // Declare dependencies on Global SDF and Global Surface Atlas
+    builder.ReadTexture("GlobalSDF", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSDFMip", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSurfaceAtlasDepth", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSurfaceAtlasGBuffer0", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSurfaceAtlasGBuffer1", RenderGraphTextureAccess::SRV);
+    builder.ReadTexture("GlobalSurfaceAtlasLighting", RenderGraphTextureAccess::SRV);
+}
+
+void DynamicDiffuseGlobalIlluminationPass::Execute(GPUContext* context)
+{
+    // Execute method is called by RenderGraph during execution phase
+    // The actual rendering logic is handled by the Render method which is called
+    // from the main rendering pipeline with proper RenderContext
+}

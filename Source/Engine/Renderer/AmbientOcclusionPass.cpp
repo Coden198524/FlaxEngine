@@ -3,6 +3,7 @@
 #include "AmbientOcclusionPass.h"
 #include "RenderList.h"
 #include "GBufferPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Content.h"
 #include "Engine/Graphics/Graphics.h"
@@ -67,6 +68,7 @@ static_assert(SSAO_MAX_BLUR_PASS_COUNT >= 0, "Invalid maximum amount of SSAO blu
 #define SSAO_APPLY_OUTPUT_FORMAT GBUFFER2_FORMAT
 
 AmbientOcclusionPass::AmbientOcclusionPass()
+    : RenderGraphComputePass(TEXT("AmbientOcclusionPass"))
 {
     _psPrepareDepths = nullptr;
     _psPrepareDepthsHalf = nullptr;
@@ -549,3 +551,32 @@ void AmbientOcclusionPass::Render(RenderContext& renderContext)
     context->ResetRenderTarget();
     context->ResetSR();
 }
+
+void AmbientOcclusionPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare input dependencies: depth and normal buffers
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    _normalBufferRef = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
+    
+    // Declare reads
+    ReadTexture(_depthBufferRef);
+    ReadTexture(_normalBufferRef);
+    
+    // Create AO output texture
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+    _aoOutputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, SSAO_AO_RESULT_FORMAT, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("AO_Output")));
+    
+    // Declare write
+    WriteTexture(_aoOutputRef);
+}
+
+void AmbientOcclusionPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    // Execute the existing Render logic
+    Render(*_renderContext);
+}
+

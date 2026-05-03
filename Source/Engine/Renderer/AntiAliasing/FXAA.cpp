@@ -1,6 +1,7 @@
 // Copyright (c) Wojciech Figat. All rights reserved.
 
 #include "FXAA.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Content/Assets/Shader.h"
 #include "Engine/Content/Content.h"
 #include "Engine/Graphics/GPUContext.h"
@@ -83,3 +84,30 @@ void FXAA::Render(RenderContext& renderContext, GPUTexture* input, GPUTextureVie
     context->SetState(_psFXAA.Get(qualityLevel));
     context->DrawFullscreenTriangle();
 }
+
+void FXAA::Setup(RenderGraphBuilder& builder)
+{
+    // Import input texture
+    _inputRef = builder.ImportTexture(TEXT("Input"), _input);
+    
+    // Declare read
+    builder.ReadTexture(_inputRef);
+    
+    // Create output texture
+    const int32 width = _input->Width();
+    const int32 height = _input->Height();
+    _outputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, _input->Format(), GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("FXAA_Output")));
+    
+    // Declare write
+    builder.WriteTexture(_outputRef);
+}
+
+void FXAA::Execute(GPUContext* context)
+{
+    if (!_renderContext || !_input || !_output)
+        return;
+    
+    // Execute the existing Render logic
+    Render(*_renderContext, _input, _output);
+}
+

@@ -3,17 +3,28 @@
 #pragma once
 
 #include "../RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 #include "Engine/Graphics/GPUPipelineStatePermutations.h"
 
 /// <summary>
 /// Temporal Anti-Aliasing effect.
 /// </summary>
-class TAA : public RendererPass<TAA>
+class TAA : public RendererPass<TAA>, public RenderGraphComputePass
 {
 private:
 
     AssetReference<Shader> _shader;
     GPUPipelineState* _psTAA;
+
+    // RenderGraph resources
+    RenderGraphTextureRef _inputRef;
+    RenderGraphTextureRef _outputRef;
+    RenderGraphTextureRef _historyRef;
+    RenderGraphTextureRef _motionVectorsRef;
+    RenderGraphTextureRef _depthBufferRef;
+    RenderContext* _renderContext = nullptr;
+    GPUTexture* _input = nullptr;
+    GPUTextureView* _output = nullptr;
 
 public:
     /// <summary>
@@ -23,6 +34,10 @@ public:
     /// <param name="input">The input render target.</param>
     /// <param name="output">The output render target.</param>
     void Render(const RenderContext& renderContext, GPUTexture* input, GPUTextureView* output);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 

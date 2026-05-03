@@ -3,11 +3,12 @@
 #pragma once
 
 #include "RendererPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphPass.h"
 
 /// <summary>
 /// Eye adaptation effect based on color buffer luminance.
 /// </summary>
-class EyeAdaptationPass : public RendererPass<EyeAdaptationPass>
+class EyeAdaptationPass : public RendererPass<EyeAdaptationPass>, public RenderGraphComputePass
 {
 private:
 
@@ -19,6 +20,10 @@ private:
     GPUPipelineState* _psHistogram = nullptr;
     bool _canUseHistogram;
 
+    // RenderGraph resources
+    RenderGraphTextureRef _colorBufferRef;
+    RenderContext* _renderContext = nullptr;
+
 public:
 
     /// <summary>
@@ -27,6 +32,10 @@ public:
     /// <param name="renderContext">The rendering context.</param>
     /// <param name="colorBuffer">The input and output color buffer to apply eye adaptation effect to it.</param>
     void Render(RenderContext& renderContext, GPUTexture* colorBuffer);
+
+    // [RenderGraphPass]
+    void Setup(RenderGraphBuilder& builder) override;
+    void Execute(GPUContext* context) override;
 
 private:
 

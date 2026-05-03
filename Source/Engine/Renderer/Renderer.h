@@ -12,6 +12,7 @@ class RenderTask;
 class SceneRenderTask;
 class MaterialBase;
 class Actor;
+class RenderGraph;
 
 /// <summary>
 /// High-level rendering service.
@@ -56,4 +57,12 @@ public:
     /// <param name="renderContext">The rendering context.</param>
     /// <param name="customActors">The custom set of actors to render. If empty, the loaded scenes will be rendered.</param>
     API_FUNCTION() static void DrawActors(API_PARAM(Ref) RenderContext& renderContext, API_PARAM(DefaultValue=null) const Array<Actor*, HeapAllocation>& customActors);
+
+    /// <summary>
+    /// Builds the render graph based on the scene setup and rendering settings.
+    /// </summary>
+    /// <param name="graph">The render graph to build.</param>
+    /// <param name="renderContext">The rendering context.</param>
+    /// <param name="renderContextBatch">The rendering context batch.</param>
+    static void BuildRenderGraph(RenderGraph& graph, RenderContext& renderContext, RenderContextBatch& renderContextBatch);
 };

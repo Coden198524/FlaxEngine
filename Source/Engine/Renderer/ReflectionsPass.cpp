@@ -4,6 +4,7 @@
 #include "GBufferPass.h"
 #include "RenderList.h"
 #include "ScreenSpaceReflectionsPass.h"
+#include "Engine/Graphics/RenderGraph/RenderGraphBuilder.h"
 #include "Engine/Core/Collections/Sorting.h"
 #include "Engine/Content/Content.h"
 #include "Engine/Core/Math/OrientedBoundingBox.h"
@@ -436,3 +437,38 @@ void ReflectionsPass::Render(RenderContext& renderContext, GPUTextureView* light
     RenderTargetPool::Release(ssrBuffer);
     RenderTargetPool::Release(reflectionsBuffer);
 }
+
+void ReflectionsPass::Setup(RenderGraphBuilder& builder)
+{
+    // Declare input dependencies: GBuffer and depth
+    _lightBufferRef = builder.ImportTexture(TEXT("LightBuffer"), _renderContext->Buffers->GBuffer0);
+    _gbuffer0Ref = builder.ImportTexture(TEXT("GBuffer0"), _renderContext->Buffers->GBuffer0);
+    _gbuffer1Ref = builder.ImportTexture(TEXT("GBuffer1"), _renderContext->Buffers->GBuffer1);
+    _gbuffer2Ref = builder.ImportTexture(TEXT("GBuffer2"), _renderContext->Buffers->GBuffer2);
+    _depthBufferRef = builder.ImportTexture(TEXT("DepthBuffer"), _renderContext->Buffers->DepthBuffer);
+    
+    // Declare reads
+    ReadTexture(_gbuffer0Ref);
+    ReadTexture(_gbuffer1Ref);
+    ReadTexture(_gbuffer2Ref);
+    ReadTexture(_depthBufferRef);
+    
+    // Create reflection output texture
+    const int32 width = _renderContext->Buffers->GetWidth();
+    const int32 height = _renderContext->Buffers->GetHeight();
+    _reflectionOutputRef = builder.CreateTexture(RenderGraphTextureDesc::Create2D(width, height, PixelFormat::R11G11B10_Float, GPUTextureFlags::ShaderResource | GPUTextureFlags::RenderTarget, TEXT("Reflections")));
+    
+    // Declare output
+    SetRenderTarget(0, _reflectionOutputRef);
+    SetDepthStencil(_depthBufferRef, true);
+}
+
+void ReflectionsPass::Execute(GPUContext* context)
+{
+    if (!_renderContext)
+        return;
+    
+    // Execute the existing Render logic
+    Render(*_renderContext, _renderContext->Buffers->GBuffer0->View());
+}
+
