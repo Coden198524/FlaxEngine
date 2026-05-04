@@ -643,12 +643,17 @@ void GPUContextWebGPU::CopyTexture(GPUTexture* dstResource, uint32 dstSubresourc
     ASSERT_LOW_LAYER(dstTextureWebGPU->Texture && srcTextureWebGPU->Texture);
 
     const int32 srcMipIndex = srcSubresource % srcTextureWebGPU->MipLevels();
-    const int32 dstMipIndex = dstSubresource % srcTextureWebGPU->MipLevels();
-    const int32 srcArrayIndex = srcSubresource / srcTextureWebGPU->ArraySize();
-    const int32 dstArrayIndex = srcSubresource / srcTextureWebGPU->ArraySize();
+    const int32 srcArrayIndex = srcSubresource / srcTextureWebGPU->MipLevels();
+    const int32 dstMipIndex = dstSubresource % dstTextureWebGPU->MipLevels();
+    const int32 dstArrayIndex = dstSubresource / dstTextureWebGPU->MipLevels();
 
     int32 srcMipWidth, srcMipHeight, srcMipDepth;
     srcTextureWebGPU->GetMipSize(srcMipIndex, srcMipWidth, srcMipHeight, srcMipDepth);
+    const int32 blockSize = PixelFormatExtensions::ComputeBlockSize(srcTextureWebGPU->Format());
+    srcMipWidth = Math::Max(srcMipWidth, blockSize);
+    srcMipHeight = Math::Max(srcMipHeight, blockSize);
+    if (srcTextureWebGPU->Dimensions() == TextureDimensions::VolumeTexture)
+        srcMipDepth = Math::Max(srcMipDepth, blockSize);
 
     if (dstTextureWebGPU->Usage & WGPUTextureUsage_CopyDst && srcTextureWebGPU->Usage & WGPUTextureUsage_CopySrc)
     {

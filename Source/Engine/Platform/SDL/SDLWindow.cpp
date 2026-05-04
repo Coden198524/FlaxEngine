@@ -63,6 +63,28 @@ bool IsPopupWindow(WindowType type)
     return type == WindowType::Popup || type == WindowType::Tooltip;
 }
 
+#if PLATFORM_WEB
+float GetSDLWindowPixelScale(SDL_Window* window)
+{
+    float scale = SDL_GetWindowPixelDensity(window);
+    if (scale <= 0.0f)
+        scale = SDL_GetWindowDisplayScale(window);
+    return scale > 0.0f ? scale : 1.0f;
+}
+
+SDL_Rect GetSDLMouseRect(SDL_Window* window, const Rectangle& rect)
+{
+    const float scale = GetSDLWindowPixelScale(window);
+    return
+    {
+        Math::TruncToInt(rect.GetX() / scale),
+        Math::TruncToInt(rect.GetY() / scale),
+        Math::Max(1, Math::TruncToInt(rect.GetWidth() / scale)),
+        Math::Max(1, Math::TruncToInt(rect.GetHeight() / scale))
+    };
+}
+#endif
+
 void* GetNativeWindowPointer(SDL_Window* window)
 {
     void* windowPtr;
@@ -138,8 +160,7 @@ SDLWindow::SDLWindow(const CreateWindowSettings& settings)
 #endif
 #if PLATFORM_WEB
     // Control canvas size
-    // TODO: try using SDL_SetWindowFillDocument (min SDL 3.4)
-    flags |= SDL_WINDOW_RESIZABLE;
+    flags |= SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #endif
 
     // The window position needs to be relative to the parent window
@@ -163,6 +184,7 @@ SDLWindow::SDLWindow(const CreateWindowSettings& settings)
 #if PLATFORM_WEB
     SDL_SetStringProperty(props, "SDL.window.create.emscripten.canvas_id", WEB_CANVAS_ID);
     SDL_SetStringProperty(props, "SDL.window.create.emscripten.keyboard_element", WEB_CANVAS_ID);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
 #endif
 
     _window = SDL_CreateWindowWithProperties(props);
@@ -173,6 +195,11 @@ SDLWindow::SDLWindow(const CreateWindowSettings& settings)
     _windowId = SDL_GetWindowID(_window);
     _handle = GetNativeWindowPointer(_window);
     ASSERT(_handle != nullptr);
+
+#if PLATFORM_WEB
+    if (!SDL_SetWindowFillDocument(_window, true))
+        LOG(Warning, "SDL_SetWindowFillDocument failed: {0}", String(SDL_GetError()));
+#endif
 
 #if PLATFORM_WINDOWS
     // Windows that have parent are hidden in taskbar on Windows in SDL so hack it
@@ -185,7 +212,13 @@ SDLWindow::SDLWindow(const CreateWindowSettings& settings)
 #endif
 
     SDL_DisplayID display = SDL_GetDisplayForWindow(_window);
+#if PLATFORM_WEB
+    _dpiScale = GetSDLWindowPixelScale(_window);
+#else
     _dpiScale = SDL_GetWindowDisplayScale(_window);
+#endif
+    if (_dpiScale <= 0.0f)
+        _dpiScale = 1.0f;
     _dpi = Math::TruncToInt(_dpiScale * DefaultDPI);
 
     Int2 minimumSize(Math::TruncToInt(_settings.MinimumSize.X) , Math::TruncToInt(_settings.MinimumSize.Y));
@@ -202,6 +235,9 @@ SDLWindow::SDLWindow(const CreateWindowSettings& settings)
     SDL_SetWindowMaximumSize(_window, maximumSize.X, maximumSize.Y);
     
     SDL_SetWindowHitTest(_window, &OnWindowHitTest, this);
+#if PLATFORM_WEB
+    _clientSize = GetClientSize();
+#endif
     InitSwapChain();
 
 #if USE_EDITOR
@@ -500,11 +536,40 @@ void SDLWindow::HandleEvent(SDL_Event& event)
     }
     case SDL_EVENT_WINDOW_RESIZED:
     {
+#if PLATFORM_WEB
+        _cachedClientRectangle.Size = Float2(static_cast<float>(event.window.data1), static_cast<float>(event.window.data2));
+
+        _dpiScale = GetSDLWindowPixelScale(_window);
+        _dpi = static_cast<int>(_dpiScale * DefaultDPI);
+
+        const Float2 clientSize = GetClientSize();
+        int32 width = static_cast<int32>(clientSize.X);
+        int32 height = static_cast<int32>(clientSize.Y);
+
+        _clientSize = clientSize;
+#else
         int32 width = event.window.data1;
         int32 height = event.window.data2;
 
         _clientSize = Float2(static_cast<float>(width), static_cast<float>(height));
         _cachedClientRectangle.Size = _clientSize;
+#endif
+
+        // Check if window size has been changed
+        if (width > 0 && height > 0 && (_swapChain == nullptr || width != _swapChain->GetWidth() || height != _swapChain->GetHeight()))
+            OnResize(width, height);
+        return;
+    }
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+    {
+        int32 width = event.window.data1;
+        int32 height = event.window.data2;
+
+#if PLATFORM_WEB
+        _dpiScale = GetSDLWindowPixelScale(_window);
+        _dpi = static_cast<int>(_dpiScale * DefaultDPI);
+#endif
+        _clientSize = Float2(static_cast<float>(width), static_cast<float>(height));
 
         // Check if window size has been changed
         if (width > 0 && height > 0 && (_swapChain == nullptr || width != _swapChain->GetWidth() || height != _swapChain->GetHeight()))
@@ -524,7 +589,11 @@ void SDLWindow::HandleEvent(SDL_Event& event)
                 Input::Mouse->SetRelativeMode(false, this);
 
             // Restore previous clipping region
+#if PLATFORM_WEB
+            SDL_Rect rect = GetSDLMouseRect(_window, _clipCursorRect);
+#else
             SDL_Rect rect{ (int)_clipCursorRect.GetX(), (int)_clipCursorRect.GetY(), (int)_clipCursorRect.GetWidth(), (int)_clipCursorRect.GetHeight() };
+#endif
             SDL_SetWindowMouseRect(_window, &rect);
 
             if (inRelativeMode)
@@ -553,6 +622,11 @@ void SDLWindow::HandleEvent(SDL_Event& event)
     }
     case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
     {
+#if PLATFORM_WEB
+        _dpiScale = GetSDLWindowPixelScale(_window);
+        _dpi = static_cast<int>(_dpiScale * DefaultDPI);
+        CheckForWindowResize();
+#else
         float scale = SDL_GetWindowDisplayScale(_window);
         if (scale > 0.0f && _dpiScale != scale)
         {
@@ -565,6 +639,7 @@ void SDLWindow::HandleEvent(SDL_Event& event)
             SDL_SetWindowSize(_window, w, h);
             // TODO: Recalculate fonts
         }
+#endif
         return;
     }
     default:
@@ -919,7 +994,11 @@ void SDLWindow::StartClippingCursor(const Rectangle& bounds)
     SetMousePosition(bounds.GetCenter());
 
     _isClippingCursor = true;
+#if PLATFORM_WEB
+    SDL_Rect rect = GetSDLMouseRect(_window, bounds);
+#else
     SDL_Rect rect{ (int)bounds.GetX(), (int)bounds.GetY(), (int)bounds.GetWidth(), (int)bounds.GetHeight() };
+#endif
     SDL_SetWindowMouseRect(_window, &rect);
     _clipCursorRect = bounds;
 }
@@ -937,8 +1016,13 @@ void SDLWindow::SetMousePosition(const Float2& position) const
 {
     if (!_settings.AllowInput || !_focused)
         return;
-        
+
+#if PLATFORM_WEB
+    const float scale = GetSDLWindowPixelScale(_window);
+    SDL_WarpMouseInWindow(_window, position.X / scale, position.Y / scale);
+#else
     SDL_WarpMouseInWindow(_window, position.X, position.Y);
+#endif
 
     Float2 screenPosition = ClientToScreen(position);
     Input::Mouse->OnMouseMoved(screenPosition);
@@ -954,12 +1038,19 @@ void SDLWindow::SetCursor(CursorType type)
 
 void SDLWindow::CheckForWindowResize()
 {
+#if !PLATFORM_WEB
     return;
+#endif
     // Cache client size
+#if PLATFORM_WEB
+    _dpiScale = GetSDLWindowPixelScale(_window);
+    _dpi = static_cast<int>(_dpiScale * DefaultDPI);
+#endif
     _clientSize = GetClientSize();
     int32 width = (int32)(_clientSize.X);
     int32 height = (int32)(_clientSize.Y);
 
+#if !PLATFORM_WEB
     // Check for windows maximized size and see if it needs to adjust position if needed
     if (_maximized)
     {
@@ -975,6 +1066,7 @@ void SDLWindow::CheckForWindowResize()
             SDL_SetWindowSize(_window, width, height);
         }
     }
+#endif
     
     // Check if window size has been changed
     if (width > 0 && height > 0 && (_swapChain == nullptr || width != _swapChain->GetWidth() || height != _swapChain->GetHeight()))
@@ -1052,4 +1144,3 @@ void SDLWindow::SetIcon(TextureData& icon)
 }
 
 #endif
-

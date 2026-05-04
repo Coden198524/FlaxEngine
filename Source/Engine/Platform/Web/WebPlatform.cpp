@@ -19,10 +19,12 @@
 #include "Engine/Engine/Engine.h"
 #include "Engine/Engine/Web/WebGame.h"
 #include "Engine/Utilities/StringConverter.h"
+#include "Engine/Core/Math/Math.h"
 #include <chrono>
 #include <dlfcn.h>
 #include <unistd.h>
 #include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
 #include <emscripten/threading.h>
 #include <emscripten/emmalloc.h>
 #include <emscripten/version.h>
@@ -44,10 +46,21 @@ EM_JS(char*, getUserAgent, (), {
 
 void WebGame::InitMainWindowSettings(CreateWindowSettings& settings)
 {
-    // Set window size matching the canvas item in HTML
+    // Set window size matching the canvas CSS box in HTML. The actual high-DPI
+    // backing buffer size is handled by SDL window pixel density.
     settings.Fullscreen = false;
     int width = 1, height = 1;
-    emscripten_get_canvas_element_size(WEB_CANVAS_ID, &width, &height);
+    double cssWidth = 0.0, cssHeight = 0.0;
+    const auto cssResult = emscripten_get_element_css_size(WEB_CANVAS_ID, &cssWidth, &cssHeight);
+    if (cssResult == EMSCRIPTEN_RESULT_SUCCESS && cssWidth > 0.0 && cssHeight > 0.0)
+    {
+        width = Math::Max(1, Math::RoundToInt((float)cssWidth));
+        height = Math::Max(1, Math::RoundToInt((float)cssHeight));
+    }
+    else
+    {
+        emscripten_get_canvas_element_size(WEB_CANVAS_ID, &width, &height);
+    }
     settings.Size.X = width;
     settings.Size.Y = height;
 }

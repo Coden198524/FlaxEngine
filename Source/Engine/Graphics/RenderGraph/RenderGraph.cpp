@@ -170,7 +170,7 @@ void RenderGraph::Clear()
     if (_executor)
         _executor->Clear();
     if (_resourceManager)
-        _resourceManager->Clear();
+        _resourceManager->ResetFrameStats();
 
     _compiled = false;
     _building = false;

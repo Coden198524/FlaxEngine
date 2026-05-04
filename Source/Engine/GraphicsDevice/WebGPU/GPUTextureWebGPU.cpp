@@ -135,7 +135,7 @@ bool GPUTextureWebGPU::OnInit()
     textureDesc.label = { _name.Get(), (size_t)_name.Length() };
 #endif
     if (!IsDepthStencil())
-        textureDesc.usage |= WGPUTextureUsage_CopyDst;
+        textureDesc.usage |= WGPUTextureUsage_CopySrc | WGPUTextureUsage_CopyDst;
     if (IsStaging())
         textureDesc.usage |= WGPUTextureUsage_CopySrc | WGPUTextureUsage_CopyDst;
     if (IsShaderResource())

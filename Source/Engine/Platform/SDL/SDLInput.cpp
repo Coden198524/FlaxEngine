@@ -377,7 +377,11 @@ public:
     Float2 GetOldMousePosition() const
     {
         ASSERT(_relativeModeWindow != nullptr);
+#if PLATFORM_WEB
+        return _relativeModeWindow->ClientToScreen(_oldPosition * (static_cast<float>(_relativeModeWindow->GetDpi()) / 96.0f));
+#else
         return _relativeModeWindow->ClientToScreen(_oldPosition);
+#endif
     }
 
     // [Mouse]
@@ -391,7 +395,12 @@ public:
         auto window = Engine::MainWindow;
 #endif
         Float2 position = window->ScreenToClient(screenPosition);
+#if PLATFORM_WEB
+        const float scale = static_cast<float>(window->GetDpi()) / 96.0f;
+        SDL_WarpMouseInWindow(static_cast<SDLWindow*>(window)->_window, position.X / scale, position.Y / scale);
+#else
         SDL_WarpMouseInWindow(static_cast<SDLWindow*>(window)->_window, position.X, position.Y);
+#endif
 
         OnMouseMoved(screenPosition);
     }
@@ -523,6 +532,11 @@ float NormalizeAxisValue(const int16 axisVal)
 
 bool SDLInput::HandleEvent(SDLWindow* window, SDL_Event& event)
 {
+#if PLATFORM_WEB
+    const float pixelScale = window ? static_cast<float>(window->GetDpi()) / 96.0f : 1.0f;
+#else
+    constexpr float pixelScale = 1.0f;
+#endif
     switch (event.type)
     {
     case SDL_EVENT_MOUSE_MOTION:
@@ -534,7 +548,7 @@ bool SDLInput::HandleEvent(SDLWindow* window, SDL_Event& event)
         }
         else
         {
-            const Float2 mousePos = window->ClientToScreen({ event.motion.x, event.motion.y });
+            const Float2 mousePos = window->ClientToScreen({ event.motion.x * pixelScale, event.motion.y * pixelScale });
             Input::Mouse->OnMouseMove(mousePos, window);
         }
         return true;
@@ -547,7 +561,7 @@ bool SDLInput::HandleEvent(SDLWindow* window, SDL_Event& event)
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
-        Float2 mousePos = window->ClientToScreen({ event.button.x, event.button.y });
+        Float2 mousePos = window->ClientToScreen({ event.button.x * pixelScale, event.button.y * pixelScale });
 
         // In case of activating the window from non-focused state, we might not have received the motion event yet
         if (!Input::Mouse->IsRelative() && event.button.down)
@@ -584,7 +598,7 @@ bool SDLInput::HandleEvent(SDLWindow* window, SDL_Event& event)
     }
     case SDL_EVENT_MOUSE_WHEEL:
     {
-        Float2 mousePos = window->ClientToScreen({ event.wheel.mouse_x, event.wheel.mouse_y });
+        Float2 mousePos = window->ClientToScreen({ event.wheel.mouse_x * pixelScale, event.wheel.mouse_y * pixelScale });
         const float delta = event.wheel.y;
 
         if (Input::Mouse->IsRelative())

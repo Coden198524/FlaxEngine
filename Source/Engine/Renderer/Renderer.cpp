@@ -38,6 +38,7 @@
 #include "Engine/Level/Scene/SceneRendering.h"
 #include "Engine/Core/Config/GraphicsSettings.h"
 #include "Engine/Engine/CommandLine.h"
+#include "Engine/Engine/Engine.h"
 #include "Engine/Graphics/Graphics.h"
 #include "Engine/Threading/JobSystem.h"
 #include "Engine/Profiler/ProfilerMemory.h"
@@ -55,6 +56,41 @@ bool EnableLightmapsUsage = true;
 
 Array<RendererPassBase*> PassList;
 
+namespace
+{
+    Array<RenderGraph*> FrameRenderGraphs;
+    uint64 FrameRenderGraphsFrame = 0;
+    int32 FrameRenderGraphsIndex = 0;
+
+    void BeginFrameRenderGraphs()
+    {
+        if (FrameRenderGraphsFrame != Engine::FrameCount)
+        {
+            for (int32 i = 0; i < FrameRenderGraphs.Count(); i++)
+                FrameRenderGraphs[i]->Clear();
+            FrameRenderGraphsIndex = 0;
+            FrameRenderGraphsFrame = Engine::FrameCount;
+        }
+    }
+
+    RenderGraph& GetFrameRenderGraph()
+    {
+        BeginFrameRenderGraphs();
+        if (FrameRenderGraphsIndex == FrameRenderGraphs.Count())
+            FrameRenderGraphs.Add(New<RenderGraph>());
+        return *FrameRenderGraphs[FrameRenderGraphsIndex++];
+    }
+
+    void ClearFrameRenderGraphs()
+    {
+        for (int32 i = 0; i < FrameRenderGraphs.Count(); i++)
+            Delete(FrameRenderGraphs[i]);
+        FrameRenderGraphs.Clear();
+        FrameRenderGraphsIndex = 0;
+        FrameRenderGraphsFrame = 0;
+    }
+}
+
 class RendererService : public EngineService
 {
 public:
@@ -64,6 +100,7 @@ public:
     }
 
     bool Init() override;
+    void Draw() override;
     void Dispose() override;
 };
 
@@ -125,8 +162,15 @@ bool RendererService::Init()
     return false;
 }
 
+void RendererService::Draw()
+{
+    BeginFrameRenderGraphs();
+}
+
 void RendererService::Dispose()
 {
+    ClearFrameRenderGraphs();
+
     // Dispose child services
     for (int32 i = 0; i < PassList.Count(); i++)
     {
@@ -1416,7 +1460,7 @@ void RenderInner(SceneRenderTask* task, RenderContext& renderContext, RenderCont
         PROFILE_GPU_CPU_NAMED("RenderGraph Execute");
 
         // Create and build the render graph
-        RenderGraph graph;
+        RenderGraph& graph = GetFrameRenderGraph();
         Renderer::BuildRenderGraph(graph, renderContext, renderContextBatch);
 
         bool graphSucceeded = true;

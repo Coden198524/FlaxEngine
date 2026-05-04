@@ -47,56 +47,56 @@ public:
     /// <summary>
     /// Anti Aliasing quality setting.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1000), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\", \"AA Quality\")")
-    Quality AAQuality = Quality::Medium;
+    API_FIELD(Attributes="EditorOrder(1000), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\", \"AA Quality\")")
+    Quality AAQuality = Quality::Ultra;
 
     /// <summary>
     /// Screen Space Reflections quality setting.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1100), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\", \"SSR Quality\")")
-    Quality SSRQuality = Quality::Medium;
+    API_FIELD(Attributes="EditorOrder(1100), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\", \"SSR Quality\")")
+    Quality SSRQuality = Quality::Ultra;
 
     /// <summary>
     /// Screen Space Ambient Occlusion quality setting.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1200), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\", \"SSAO Quality\")")
-    Quality SSAOQuality = Quality::Medium;
+    API_FIELD(Attributes="EditorOrder(1200), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\", \"SSAO Quality\")")
+    Quality SSAOQuality = Quality::Ultra;
 
     /// <summary>
     /// Volumetric Fog quality setting.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1250), DefaultValue(Quality.High), EditorDisplay(\"Quality\")")
-    Quality VolumetricFogQuality = Quality::High;
+    API_FIELD(Attributes="EditorOrder(1250), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\")")
+    Quality VolumetricFogQuality = Quality::Ultra;
 
     /// <summary>
     /// The shadows quality.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1300), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\")")
-    Quality ShadowsQuality = Quality::Medium;
+    API_FIELD(Attributes="EditorOrder(1300), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\")")
+    Quality ShadowsQuality = Quality::Ultra;
 
     /// <summary>
     /// The shadow maps quality (textures resolution).
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1310), DefaultValue(Quality.Medium), EditorDisplay(\"Quality\")")
-    Quality ShadowMapsQuality = Quality::Medium;
+    API_FIELD(Attributes="EditorOrder(1310), DefaultValue(Quality.Ultra), EditorDisplay(\"Quality\")")
+    Quality ShadowMapsQuality = Quality::Ultra;
 
     /// <summary>
     /// Enables cascades splits blending for directional light shadows.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1320), DefaultValue(false), EditorDisplay(\"Quality\", \"Allow CSM Blending\")")
-    bool AllowCSMBlending = false;
+    API_FIELD(Attributes="EditorOrder(1320), DefaultValue(true), EditorDisplay(\"Quality\", \"Allow CSM Blending\")")
+    bool AllowCSMBlending = true;
 
     /// <summary>
     /// Default probes cubemap resolution (use for Environment Probes, can be overriden per-actor).
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1500), EditorDisplay(\"Quality\")")
-    ProbeCubemapResolution DefaultProbeResolution = ProbeCubemapResolution::_128;
+    API_FIELD(Attributes="EditorOrder(1500), DefaultValue(ProbeCubemapResolution._2048), EditorDisplay(\"Quality\")")
+    ProbeCubemapResolution DefaultProbeResolution = ProbeCubemapResolution::_2048;
 
     /// <summary>
     /// If checked, Environment Probes will use HDR texture format. Improves quality in very bright scenes at cost of higher memory usage.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(1502), EditorDisplay(\"Quality\")")
-    bool UseHDRProbes = false;
+    API_FIELD(Attributes="EditorOrder(1502), DefaultValue(true), EditorDisplay(\"Quality\")")
+    bool UseHDRProbes = true;
 
     /// <summary>
     /// If checked, enables Global SDF rendering. This can be used in materials, shaders, and particles.
@@ -113,8 +113,8 @@ public:
     /// <summary>
     /// The Global SDF quality. Controls the volume texture resolution and amount of cascades to use.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(2005), DefaultValue(Quality.High), EditorDisplay(\"Global SDF\")")
-    Quality GlobalSDFQuality = Quality::High;
+    API_FIELD(Attributes="EditorOrder(2005), DefaultValue(Quality.Ultra), EditorDisplay(\"Global SDF\")")
+    Quality GlobalSDFQuality = Quality::Ultra;
 
 #if USE_EDITOR
     /// <summary>
@@ -127,8 +127,8 @@ public:
     /// <summary>
     /// The Global Illumination quality. Controls the quality of the GI effect.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(2100), DefaultValue(Quality.High), EditorDisplay(\"Global Illumination\")")
-    Quality GIQuality = Quality::High;
+    API_FIELD(Attributes="EditorOrder(2100), DefaultValue(Quality.Ultra), EditorDisplay(\"Global Illumination\")")
+    Quality GIQuality = Quality::Ultra;
 
     /// <summary>
     /// The Global Illumination probes spacing distance (in world units). Defines the quality of the GI resolution. Adjust to 200-500 to improve performance and lower frequency GI data.
@@ -139,8 +139,8 @@ public:
     /// <summary>
     /// Enables cascades splits blending for Global Illumination.
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(2125), DefaultValue(false), EditorDisplay(\"Global Illumination\", \"GI Cascades Blending\")")
-    bool GICascadesBlending = false;
+    API_FIELD(Attributes="EditorOrder(2125), DefaultValue(true), EditorDisplay(\"Global Illumination\", \"GI Cascades Blending\")")
+    bool GICascadesBlending = true;
 
     /// <summary>
     /// The Global Surface Atlas resolution. Adjust it if atlas `flickers` due to overflow (eg. to 4096).
@@ -159,8 +159,8 @@ public:
     /// <summary>
     /// Pixel format used by the rendering pipeline (for light buffer and post-processing).
     /// </summary>
-    API_FIELD(Attributes="EditorOrder(3010), EditorDisplay(\"Colors\")")
-    RenderColorFormats RenderColorFormat = RenderColorFormats::R11G11B10;
+    API_FIELD(Attributes="EditorOrder(3010), DefaultValue(RenderColorFormats.R16G16B16A16), EditorDisplay(\"Colors\")")
+    RenderColorFormats RenderColorFormat = RenderColorFormats::R16G16B16A16;
 
 public:
     /// <summary>

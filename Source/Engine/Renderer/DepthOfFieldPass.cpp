@@ -473,7 +473,8 @@ void DepthOfFieldPass::Execute(GPUContext* context)
     context->ResetSR();
 
     GPUTexture* tmp = RenderTargetPool::Get(output->GetDescription());
-    RENDER_TARGET_POOL_SET_NAME(tmp, "RenderGraph.DOF.Temp");
+    GPUTexture* pooledTemp = tmp;
+    RENDER_TARGET_POOL_SET_NAME(pooledTemp, "RenderGraph.DOF.Temp");
     GPUTexture* frame = output;
     Render(*_renderContext, frame, tmp);
 
@@ -490,5 +491,5 @@ void DepthOfFieldPass::Execute(GPUContext* context)
     context->ResetRenderTarget();
     context->ResetSR();
     context->ResetUA();
-    RenderTargetPool::Release(tmp);
+    RenderTargetPool::Release(pooledTemp);
 }

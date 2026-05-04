@@ -15,17 +15,17 @@
 #endif
 
 bool Graphics::UseVSync = false;
-Quality Graphics::AAQuality = Quality::Medium;
-Quality Graphics::SSRQuality = Quality::Medium;
-Quality Graphics::SSAOQuality = Quality::Medium;
-Quality Graphics::VolumetricFogQuality = Quality::High;
-Quality Graphics::ShadowsQuality = Quality::Medium;
-Quality Graphics::ShadowMapsQuality = Quality::Medium;
+Quality Graphics::AAQuality = Quality::Ultra;
+Quality Graphics::SSRQuality = Quality::Ultra;
+Quality Graphics::SSAOQuality = Quality::Ultra;
+Quality Graphics::VolumetricFogQuality = Quality::Ultra;
+Quality Graphics::ShadowsQuality = Quality::Ultra;
+Quality Graphics::ShadowMapsQuality = Quality::Ultra;
 float Graphics::ShadowUpdateRate = 1.0f;
-bool Graphics::AllowCSMBlending = false;
-Quality Graphics::GlobalSDFQuality = Quality::High;
-Quality Graphics::GIQuality = Quality::High;
-bool Graphics::GICascadesBlending = false;
+bool Graphics::AllowCSMBlending = true;
+Quality Graphics::GlobalSDFQuality = Quality::Ultra;
+Quality Graphics::GIQuality = Quality::Ultra;
+bool Graphics::GICascadesBlending = true;
 PostProcessSettings Graphics::PostProcessSettings;
 bool Graphics::GammaColorSpace = true;
 bool Graphics::SpreadWorkload = true;

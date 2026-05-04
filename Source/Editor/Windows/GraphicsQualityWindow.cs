@@ -32,7 +32,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.UseVSync = value;
             }
 
-            [DefaultValue(Quality.Medium)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1000), EditorDisplay("Quality", "AA Quality"), Tooltip("Anti Aliasing quality.")]
             public Quality AAQuality
             {
@@ -40,7 +40,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.AAQuality = value;
             }
 
-            [DefaultValue(Quality.Medium)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1100), EditorDisplay("Quality", "SSR Quality"), Tooltip("Screen Space Reflections quality.")]
             public Quality SSRQuality
             {
@@ -48,6 +48,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.SSRQuality = value;
             }
 
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1200), EditorDisplay("Quality", "SSAO Quality"), Tooltip("Screen Space Ambient Occlusion quality setting.")]
             public Quality SSAOQuality
             {
@@ -55,7 +56,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.SSAOQuality = value;
             }
 
-            [DefaultValue(Quality.High)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1250), EditorDisplay("Quality", "Volumetric Fog Quality"), Tooltip("Volumetric Fog quality setting.")]
             public Quality VolumetricFogQuality
             {
@@ -63,7 +64,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.VolumetricFogQuality = value;
             }
 
-            [DefaultValue(Quality.High)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1280), EditorDisplay("Quality"), Tooltip("The Global SDF quality. Controls the volume texture resolution and amount of cascades to use.")]
             public Quality GlobalSDFQuality
             {
@@ -71,7 +72,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.GlobalSDFQuality = value;
             }
 
-            [DefaultValue(Quality.High)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1290), EditorDisplay("Quality"), Tooltip("The Global Illumination quality. Controls the quality of the GI effect.")]
             public Quality GIQuality
             {
@@ -79,7 +80,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.GIQuality = value;
             }
 
-            [DefaultValue(Quality.Medium)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1300), EditorDisplay("Quality", "Shadows Quality"), Tooltip("The shadows quality.")]
             public Quality ShadowsQuality
             {
@@ -87,7 +88,7 @@ namespace FlaxEditor.Windows
                 set => Graphics.ShadowsQuality = value;
             }
 
-            [DefaultValue(Quality.Medium)]
+            [DefaultValue(Quality.Ultra)]
             [EditorOrder(1310), EditorDisplay("Quality", "Shadow Maps Quality"), Tooltip("The shadow maps quality (textures resolution).")]
             public Quality ShadowMapsQuality
             {
