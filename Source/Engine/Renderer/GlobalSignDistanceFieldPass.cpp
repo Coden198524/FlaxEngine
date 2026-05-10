@@ -22,10 +22,19 @@
 #include "Engine/Threading/JobSystem.h"
 
 // Some of those constants must match in shader
+#if PLATFORM_WEB
+#define GLOBAL_SDF_FORMAT PixelFormat::R32_Float
+#define GLOBAL_SDF_RASTERIZE_MODEL_MAX_COUNT 16 // Keep within WebGPU default sampled texture limit.
+#else
 #define GLOBAL_SDF_FORMAT PixelFormat::R8_SNorm
 #define GLOBAL_SDF_RASTERIZE_MODEL_MAX_COUNT 28 // The maximum amount of models to rasterize at once as a batch into Global SDF.
+#endif
 #define GLOBAL_SDF_RASTERIZE_HEIGHTFIELD_MAX_COUNT 2 // The maximum amount of heightfields to store in a single chunk.
+#if PLATFORM_WEB
+#define GLOBAL_SDF_RASTERIZE_GROUP_SIZE 4
+#else
 #define GLOBAL_SDF_RASTERIZE_GROUP_SIZE 8
+#endif
 #define GLOBAL_SDF_RASTERIZE_CHUNK_SIZE 32 // Global SDF chunk size in voxels.
 #define GLOBAL_SDF_RASTERIZE_CHUNK_MARGIN 4 // The margin in voxels around objects for culling. Reduces artifacts but reduces performance.
 #define GLOBAL_SDF_RASTERIZE_MIP_FACTOR 4 // Global SDF mip resolution downscale factor.
@@ -605,8 +614,8 @@ bool GlobalSignDistanceFieldPass::Init()
 {
     // Check platform support
     const auto device = GPUDevice::Instance;
-    _supported = device->GetFeatureLevel() >= FeatureLevel::SM5 && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad
-            && EnumHasAllFlags(device->GetFormatFeatures(GLOBAL_SDF_FORMAT).Support, FormatSupport::ShaderSample | FormatSupport::Texture3D);
+    _supported = (device->GetFeatureLevel() >= FeatureLevel::SM5 || device->GetShaderProfile() == ShaderProfile::WebGPU) && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad
+            && EnumHasAllFlags(device->GetFormatFeatures(GLOBAL_SDF_FORMAT).Support, FormatSupport::ShaderSample | FormatSupport::Texture3D | FormatSupport::UnorderedAccessReadWrite);
     return false;
 }
 
@@ -947,6 +956,9 @@ bool GlobalSignDistanceFieldPass::Render(RenderContext& renderContext, GPUContex
                     if (chunk.ModelsCount != 0 && layer != 0) // Models from layer 0 has been already written
                     {
                         // Inject models (additive)
+#if PLATFORM_WEB
+                        continue;
+#else
                         for (int32 i = 0; i < chunk.ModelsCount; i++)
                         {
                             auto objectIndex = objectIndexToDataIndex.At(chunk.Models[i]);
@@ -959,6 +971,7 @@ bool GlobalSignDistanceFieldPass::Render(RenderContext& renderContext, GPUContex
                         context->UpdateCB(_cb1, &data);
                         context->Dispatch(_csRasterizeModel1, chunkDispatchGroups, chunkDispatchGroups, chunkDispatchGroups);
                         chunkDispatches++;
+#endif
                     }
 
                     if (chunk.HeightfieldsCount != 0)

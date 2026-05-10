@@ -4,6 +4,7 @@
 
 #if GRAPHICS_API_WEBGPU
 
+#include "Engine/Core/Collections/Dictionary.h"
 #include "Engine/Graphics/Shaders/GPUShaderProgram.h"
 #include "Engine/GraphicsDevice/Vulkan/Types.h"
 #include <webgpu/webgpu.h>
@@ -42,6 +43,27 @@ private:
 
 public:
     WGPUBindGroup Get(WGPUDevice device, GPUBindGroupKeyWebGPU& key, const StringAnsiView& debugName, uint64 gcFrames = 50);
+};
+
+/// <summary>
+/// Batches compute pipeline resource layout state. WebGPU texture sample type is part of the bind group layout.
+/// </summary>
+struct GPUComputePipelineKeyWebGPU
+{
+    uint32 Hash = 0;
+    uint8 SampleTypesCount = 0;
+    uint8 SampleTypes[SpirvShaderDescriptorInfo::MaxDescriptors] = {};
+
+    bool operator==(const GPUComputePipelineKeyWebGPU& other) const;
+};
+
+uint32 GetHash(const GPUComputePipelineKeyWebGPU& key);
+
+struct GPUComputePipelineWebGPU
+{
+    WGPUComputePipeline Pipeline = nullptr;
+    WGPUBindGroupLayout BindGroupLayout = nullptr;
+    WGPUSamplerBindingType SamplerTypes[GPU_MAX_SAMPLER_BINDED] = {};
 };
 
 /// <summary>
@@ -111,8 +133,7 @@ public:
 class GPUShaderProgramCSWebGPU : public GPUShaderProgramWebGPU<GPUShaderProgramCS>
 {
 private:
-    WGPUComputePipeline _pipeline = nullptr;
-    WGPUBindGroupLayout _bindGroupLayout = nullptr;
+    Dictionary<GPUComputePipelineKeyWebGPU, GPUComputePipelineWebGPU> _pipelines;
     GPUBindGroupCacheWebGPU _bindGroupCache;
 
 public:
@@ -123,15 +144,18 @@ public:
 
     ~GPUShaderProgramCSWebGPU()
     {
-        if (_bindGroupLayout)
-            wgpuBindGroupLayoutRelease(_bindGroupLayout);
-        if (_pipeline)
-            wgpuComputePipelineRelease(_pipeline);
+        for (auto& e : _pipelines)
+        {
+            if (e.Value.BindGroupLayout)
+                wgpuBindGroupLayoutRelease(e.Value.BindGroupLayout);
+            if (e.Value.Pipeline)
+                wgpuComputePipelineRelease(e.Value.Pipeline);
+        }
     }
 
 public:
     // Gets the pipeline.
-    WGPUComputePipeline GetPipeline(WGPUDevice device, const GPUContextBindingsWebGPU& bindings, WGPUBindGroupLayout& resultBindGroupLayout);
+    WGPUComputePipeline GetPipeline(WGPUDevice device, bool float32Filterable, const GPUContextBindingsWebGPU& bindings, WGPUBindGroupLayout& resultBindGroupLayout, const WGPUSamplerBindingType*& resultSamplerTypes);
 
     // Gets the bind group for the given key (unhashed). Bind groups are cached and reused for the same key.
     FORCE_INLINE WGPUBindGroup GetBindGroup(WGPUDevice device, GPUBindGroupKeyWebGPU& key)

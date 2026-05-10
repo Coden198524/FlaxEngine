@@ -102,7 +102,7 @@ private:
     void FlushBindGroup();
     void FlushTimestamps(int32 skipLast = 0);
     constexpr static int32 DynamicOffsetsMax = 4;
-    void BuildBindGroup(uint32 groupIndex, const SpirvShaderDescriptorInfo& descriptors, GPUPipelineStateWebGPU::BindGroupKey& key, uint32 dynamicOffsets[DynamicOffsetsMax], uint32& dynamicOffsetsCount);
+    void BuildBindGroup(uint32 groupIndex, const SpirvShaderDescriptorInfo& descriptors, GPUPipelineStateWebGPU::BindGroupKey& key, uint32 dynamicOffsets[DynamicOffsetsMax], uint32& dynamicOffsetsCount, const WGPUSamplerBindingType* samplerTypes = nullptr);
 
 public:
     // [GPUContext]

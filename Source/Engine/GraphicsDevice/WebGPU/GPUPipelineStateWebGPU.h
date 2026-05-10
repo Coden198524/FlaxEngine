@@ -58,6 +58,7 @@ public:
     GPUShaderProgramPSWebGPU* PS = nullptr;
     WGPURenderPipelineDescriptor PipelineDesc;
     WGPUBindGroupLayout BindGroupLayouts[GPUBindGroupsWebGPU::GraphicsMax] = {};
+    WGPUSamplerBindingType BindGroupSamplerTypes[GPUBindGroupsWebGPU::GraphicsMax][GPU_MAX_SAMPLER_BINDED] = {};
     SpirvShaderDescriptorInfo* BindGroupDescriptors[GPUBindGroupsWebGPU::GraphicsMax] = {};
 
 public:

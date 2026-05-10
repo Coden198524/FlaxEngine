@@ -41,6 +41,7 @@ protected:
 protected:
     virtual void InitParsing(ShaderCompilationContext* context, glslang::TShader& shader);
     virtual void InitCodegen(ShaderCompilationContext* context, glslang::SpvOptions& spvOptions);
+    virtual int32 GetMessages() const;
     virtual bool Write(ShaderCompilationContext* context, ShaderFunctionMeta& meta, int32 permutationIndex, const ShaderBindings& bindings, struct SpirvShaderHeader& header, std::vector<unsigned>& spirv);
 };
 

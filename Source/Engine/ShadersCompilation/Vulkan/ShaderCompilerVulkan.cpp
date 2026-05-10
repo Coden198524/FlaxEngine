@@ -618,7 +618,7 @@ bool ShaderCompilerVulkan::CompileShader(ShaderFunctionMeta& meta, WritePermutat
         LOG(Error, "Unknown shader type.");
         return true;
     }
-    EShMessages messages = (EShMessages)(EShMsgReadHlsl | EShMsgSpvRules | EShMsgVulkanRules);
+    EShMessages messages = (EShMessages)GetMessages();
 
     // Compile all shader function permutations
     AdditionalDataVS additionalDataVS;
@@ -962,6 +962,11 @@ void ShaderCompilerVulkan::InitCodegen(ShaderCompilationContext* context, glslan
     spvOptions.optimizeSize = !context->Options->NoOptimize;
     spvOptions.stripDebugInfo = !context->Options->GenerateDebugData;
     spvOptions.validate = BUILD_DEBUG;
+}
+
+int32 ShaderCompilerVulkan::GetMessages() const
+{
+    return EShMsgReadHlsl | EShMsgSpvRules | EShMsgVulkanRules;
 }
 
 bool ShaderCompilerVulkan::Write(ShaderCompilationContext* context, ShaderFunctionMeta& meta, int32 permutationIndex, const ShaderBindings& bindings, struct SpirvShaderHeader& header, std::vector<unsigned int>& spirv)

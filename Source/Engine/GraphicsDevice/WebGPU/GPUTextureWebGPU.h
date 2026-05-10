@@ -127,6 +127,11 @@ public:
         ASSERT(IsVolume());
         return (GPUTextureView*)&_handleVolume;
     }
+    GPUTextureView* ViewCube() const
+    {
+        ASSERT(IsCubeMap());
+        return IsArray() ? (GPUTextureView*)&_handleArray : (GPUTextureView*)&_handlesPerSlice[0];
+    }
     GPUTextureView* ViewReadOnlyDepth() const override
     {
         ASSERT(_desc.Flags & GPUTextureFlags::ReadOnlyDepthView);

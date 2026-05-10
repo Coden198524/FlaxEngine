@@ -125,6 +125,30 @@ float3 SampleGlobalSurfaceAtlasTex(Texture2D atlas, float2 atlasUV, float4 bilin
     return float3(dot(sampleX, bilinearWeights), dot(sampleY, bilinearWeights), dot(sampleZ, bilinearWeights));
 }
 
+#if defined(WGSL)
+float LoadGlobalSurfaceAtlasDepth(Texture2D depth, int2 coord, uint2 size)
+{
+    coord = clamp(coord, int2(0, 0), int2(size) - int2(1, 1));
+    return depth.Load(int3(coord, 0)).r;
+}
+#endif
+
+float4 SampleGlobalSurfaceAtlasDepth(Texture2D depth, float2 atlasUV)
+{
+#if defined(WGSL)
+    uint2 size;
+    depth.GetDimensions(size.x, size.y);
+    int2 coord = int2(atlasUV * (float2)size);
+    return float4(
+        LoadGlobalSurfaceAtlasDepth(depth, coord + int2(0, 1), size),
+        LoadGlobalSurfaceAtlasDepth(depth, coord + int2(1, 1), size),
+        LoadGlobalSurfaceAtlasDepth(depth, coord + int2(1, 0), size),
+        LoadGlobalSurfaceAtlasDepth(depth, coord + int2(0, 0), size));
+#else
+    return depth.Gather(SamplerLinearClamp, atlasUV);
+#endif
+}
+
 float4 SampleGlobalSurfaceAtlasTile(const GlobalSurfaceAtlasData data, GlobalSurfaceObject object, GlobalSurfaceTile tile, Texture2D depth, Texture2D atlas, float3 worldPosition, float3 worldNormal, float surfaceThreshold)
 {
 #if GLOBAL_SURFACE_ATLAS_TILE_NORMAL_WEIGHT_ENABLED
@@ -153,7 +177,7 @@ float4 SampleGlobalSurfaceAtlasTile(const GlobalSurfaceAtlasData data, GlobalSur
     bilinearWeights.w = (1 - bilinearWeightsUV.x) * (1 - bilinearWeightsUV.y);
 
     // Tile depth weight based on sample position occlusion
-    float4 tileZ = depth.Gather(SamplerLinearClamp, atlasUV);
+    float4 tileZ = SampleGlobalSurfaceAtlasDepth(depth, atlasUV);
     float depthThreshold = 2.0f * surfaceThreshold / tile.ViewBoundsSize.z;
     float4 depthVisibility = 1.0f;
     UNROLL

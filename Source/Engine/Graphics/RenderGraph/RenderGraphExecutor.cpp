@@ -30,12 +30,17 @@ bool RenderGraphExecutor::Execute(RenderGraph* graph, RenderGraphCompiler* compi
     // Get sorted passes from compiler
     const auto& sortedPasses = compiler->GetSortedPasses();
 
+    // Reset state once at the beginning to ensure clean slate
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
+
     // Execute passes in order
     RenderGraphPass* previousPass = nullptr;
     for (int32 i = 0; i < sortedPasses.Count(); i++)
     {
         RenderGraphPass* pass = sortedPasses[i];
-        
+
         // Skip culled passes
         if (pass->_culled)
             continue;
@@ -44,23 +49,19 @@ bool RenderGraphExecutor::Execute(RenderGraph* graph, RenderGraphCompiler* compi
         if (previousPass)
             InsertSynchronization(context, previousPass, pass);
 
-        // Keep D3D-style APIs from carrying stale SRV/UAV/RT bindings across graph passes.
-        context->ResetRenderTarget();
-        context->ResetSR();
-        context->ResetUA();
-
         // Transition resources to required states
         TransitionResources(graph, pass, context);
 
         // Execute the pass
         ExecutePass(graph, pass, context);
 
-        context->ResetRenderTarget();
-        context->ResetSR();
-        context->ResetUA();
-
         previousPass = pass;
     }
+
+    // Reset state once at the end to clean up
+    context->ResetRenderTarget();
+    context->ResetSR();
+    context->ResetUA();
 
     return true;
 }
@@ -78,14 +79,18 @@ void RenderGraphExecutor::ExecutePass(RenderGraph* graph, RenderGraphPass* pass,
 
     PROFILE_CPU_NAMED("RenderGraph.Pass");
 
-    // Begin GPU event for debugging
+#if GPU_ALLOW_PROFILE_EVENTS && BUILD_DEBUG
+    // Begin GPU event for debugging (only in debug builds)
     context->EventBegin(pass->GetName().GetText());
+#endif
 
     // Execute the pass
     pass->Execute(context);
 
+#if GPU_ALLOW_PROFILE_EVENTS && BUILD_DEBUG
     // End GPU event
     context->EventEnd();
+#endif
 }
 
 void RenderGraphExecutor::TransitionResources(RenderGraph* graph, RenderGraphPass* pass, GPUContext* context)

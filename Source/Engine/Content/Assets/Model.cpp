@@ -81,9 +81,10 @@ Model::Model(const SpawnParams& params, const AssetInfo* info)
 {
     if (EnableModelSDF == 0 && GPUDevice::Instance)
     {
-        bool enable = GPUDevice::Instance->GetFeatureLevel() >= FeatureLevel::SM5;
+        bool enable = GPUDevice::Instance->GetFeatureLevel() >= FeatureLevel::SM5 || GPUDevice::Instance->GetShaderProfile() == ShaderProfile::WebGPU;
 #if !USE_EDITOR
-        enable &= GraphicsSettings::Get()->EnableGlobalSDF;
+        auto* graphicsSettings = GraphicsSettings::Get();
+        enable &= graphicsSettings->EnableGlobalSDF || graphicsSettings->PostProcessSettings.GlobalIllumination.Mode == GlobalIlluminationMode::DDGI;
 #if !BUILD_RELEASE
         if (!enable)
             LOG(Info, "Not using Model SDFs");

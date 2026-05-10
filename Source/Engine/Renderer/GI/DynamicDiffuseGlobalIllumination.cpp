@@ -196,7 +196,7 @@ bool DynamicDiffuseGlobalIlluminationPass::Init()
 {
     // Check platform support
     const auto device = GPUDevice::Instance;
-    _supported = device->GetFeatureLevel() >= FeatureLevel::SM5 && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad;
+    _supported = (device->GetFeatureLevel() >= FeatureLevel::SM5 || device->GetShaderProfile() == ShaderProfile::WebGPU) && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad;
     return false;
 }
 
@@ -418,11 +418,11 @@ bool DynamicDiffuseGlobalIlluminationPass::RenderInner(RenderContext& renderCont
         auto desc = GPUTextureDescription::New2D(probesCountTotalX, probesCountTotalY, PixelFormat::Unknown);
 #define INIT_TEXTURE(texture, format, width, height) desc.Format = format; desc.Width = width; desc.Height = height; ddgiData.texture = RenderTargetPool::Get(desc); if (!ddgiData.texture) return true; memUsage += ddgiData.texture->GetMemoryUsage(); RENDER_TARGET_POOL_SET_NAME(ddgiData.texture, "DDGI." #texture)
         desc.Flags = GPUTextureFlags::ShaderResource | GPUTextureFlags::UnorderedAccess;
-        INIT_TEXTURE(ProbesTrace, PixelFormat::R16G16B16A16_Float, probeRaysCount, Math::Min(probesCountCascade, DDGI_TRACE_RAYS_PROBES_COUNT_LIMIT));
-        INIT_TEXTURE(ProbesData, PixelFormat::R8G8B8A8_SNorm, probesCountTotalX, probesCountTotalY);
+        INIT_TEXTURE(ProbesTrace, PLATFORM_WEB ? PixelFormat::R32G32B32A32_Float : PixelFormat::R16G16B16A16_Float, probeRaysCount, Math::Min(probesCountCascade, DDGI_TRACE_RAYS_PROBES_COUNT_LIMIT));
+        INIT_TEXTURE(ProbesData, PLATFORM_WEB ? PixelFormat::R32G32B32A32_Float : PixelFormat::R8G8B8A8_SNorm, probesCountTotalX, probesCountTotalY);
         // TODO: add BC6H compression to probes data (https://github.com/knarkowicz/GPURealTimeBC6H)
-        INIT_TEXTURE(ProbesIrradiance, PixelFormat::R11G11B10_Float, probesCountTotalX * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2), probesCountTotalY * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2));
-        INIT_TEXTURE(ProbesDistance, PixelFormat::R16G16_Float, probesCountTotalX * (DDGI_PROBE_RESOLUTION_DISTANCE + 2), probesCountTotalY * (DDGI_PROBE_RESOLUTION_DISTANCE + 2));
+        INIT_TEXTURE(ProbesIrradiance, PLATFORM_WEB ? PixelFormat::R32G32B32A32_Float : PixelFormat::R11G11B10_Float, probesCountTotalX * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2), probesCountTotalY * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2));
+        INIT_TEXTURE(ProbesDistance, PLATFORM_WEB ? PixelFormat::R32G32B32A32_Float : PixelFormat::R16G16_Float, probesCountTotalX * (DDGI_PROBE_RESOLUTION_DISTANCE + 2), probesCountTotalY * (DDGI_PROBE_RESOLUTION_DISTANCE + 2));
 #if DDGI_DEBUG_INSTABILITY
         INIT_TEXTURE(ProbesInstability, PixelFormat::R16_Float, probesCountTotalX * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2), probesCountTotalY * (DDGI_PROBE_RESOLUTION_IRRADIANCE + 2));
 #endif

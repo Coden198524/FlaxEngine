@@ -22,6 +22,7 @@ RenderGraph::RenderGraph()
     , _renderContext(nullptr)
     , _renderContextBatch(nullptr)
     , _currentSetupPass(nullptr)
+    , _structureHash(0)
 {
     _compiler = New<RenderGraphCompiler>();
     _executor = New<RenderGraphExecutor>();
@@ -86,6 +87,15 @@ bool RenderGraph::Compile()
         return false;
     }
 
+    // Compute current graph structure hash
+    uint64 currentHash = ComputeStructureHash();
+
+    // If graph structure hasn't changed and already compiled, skip recompilation
+    if (_compiled && currentHash == _structureHash)
+    {
+        return true;
+    }
+
     // Build dependencies by calling Setup on all passes
     {
         PROFILE_CPU_NAMED("RenderGraph.BuildDependencies");
@@ -109,6 +119,7 @@ bool RenderGraph::Compile()
     }
 
     _compiled = true;
+    _structureHash = currentHash;
     return true;
 }
 
@@ -177,6 +188,7 @@ void RenderGraph::Clear()
     _renderContext = nullptr;
     _renderContextBatch = nullptr;
     _currentSetupPass = nullptr;
+    _structureHash = 0;
 }
 
 RenderGraphTextureRef RenderGraph::CreateTexture(const RenderGraphTextureDesc& desc)
@@ -588,4 +600,45 @@ void RenderGraph::ReleaseResources()
     // Release unused resources from the pool
     if (_resourceManager)
         _resourceManager->ReleaseUnusedResources();
+}
+
+uint64 RenderGraph::ComputeStructureHash() const
+{
+    // Compute hash based on graph structure (passes, their types, and dependencies)
+    uint64 hash = 0;
+
+    // Hash pass count
+    hash = (hash * 31) + _passes.Count();
+
+    // Hash each pass
+    for (int32 i = 0; i < _passes.Count(); i++)
+    {
+        RenderGraphPass* pass = _passes[i];
+        if (!pass)
+            continue;
+
+        // Hash pass type (use name hash as proxy for type)
+        const String& passName = pass->GetName();
+        for (int32 j = 0; j < passName.Length(); j++)
+        {
+            hash = (hash * 31) + passName[j];
+        }
+
+        // Hash pass flags
+        hash = (hash * 31) + (uint64)pass->GetFlags();
+
+        // Hash texture reads count
+        hash = (hash * 31) + pass->_textureReads.Count();
+
+        // Hash texture writes count
+        hash = (hash * 31) + pass->_textureWrites.Count();
+
+        // Hash buffer reads count
+        hash = (hash * 31) + pass->_bufferReads.Count();
+
+        // Hash buffer writes count
+        hash = (hash * 31) + pass->_bufferWrites.Count();
+    }
+
+    return hash;
 }

@@ -85,6 +85,11 @@ void GPUTextureViewWebGPU::Create(WGPUTexture texture, const WGPUTextureViewDesc
     Format = desc.format;
     switch (Format)
     {
+    case WGPUTextureFormat_R32Float:
+    case WGPUTextureFormat_RG32Float:
+    case WGPUTextureFormat_RGBA32Float:
+        SampleType = ((GPUTextureWebGPU*)GetParent())->GetDevice()->Float32Filterable && desc.dimension != WGPUTextureViewDimension_3D ? WGPUTextureSampleType_Float : WGPUTextureSampleType_UnfilterableFloat;
+        break;
     case WGPUTextureFormat_Depth16Unorm:
     case WGPUTextureFormat_Depth24Plus:
     case WGPUTextureFormat_Depth24PlusStencil8:

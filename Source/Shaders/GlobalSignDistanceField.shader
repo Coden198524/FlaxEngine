@@ -5,9 +5,17 @@
 #include "./Flax/GlobalSignDistanceField.hlsl"
 #include "./Flax/TerrainCommon.hlsl"
 
+#if defined(PLATFORM_WEB)
+#define GLOBAL_SDF_RASTERIZE_MODEL_MAX_COUNT 16
+#else
 #define GLOBAL_SDF_RASTERIZE_MODEL_MAX_COUNT 28
+#endif
 #define GLOBAL_SDF_RASTERIZE_HEIGHTFIELD_MAX_COUNT 2
+#if defined(PLATFORM_WEB)
+#define GLOBAL_SDF_RASTERIZE_GROUP_SIZE 4
+#else
 #define GLOBAL_SDF_RASTERIZE_GROUP_SIZE 8
+#endif
 #define GLOBAL_SDF_MIP_GROUP_SIZE 4
 
 struct ObjectRasterizeData
@@ -74,16 +82,63 @@ float CombineSDF(float oldSdf, float newSdf)
 
 #if defined(_CS_RasterizeModel) || defined(_CS_RasterizeHeightfield)
 
-RWTexture3D<snorm float> GlobalSDFTex : register(u0);
+GLOBAL_SDF_RW_TEXTURE GlobalSDFTex : register(u0);
 StructuredBuffer<ObjectRasterizeData> ObjectsBuffer : register(t0);
 
 #endif
 
 #if defined(_CS_RasterizeModel)
 
+#if defined(PLATFORM_WEB)
+Texture3D<float> ObjectTexture0 : register(t1);
+Texture3D<float> ObjectTexture1 : register(t2);
+Texture3D<float> ObjectTexture2 : register(t3);
+Texture3D<float> ObjectTexture3 : register(t4);
+Texture3D<float> ObjectTexture4 : register(t5);
+Texture3D<float> ObjectTexture5 : register(t6);
+Texture3D<float> ObjectTexture6 : register(t7);
+Texture3D<float> ObjectTexture7 : register(t8);
+Texture3D<float> ObjectTexture8 : register(t9);
+Texture3D<float> ObjectTexture9 : register(t10);
+Texture3D<float> ObjectTexture10 : register(t11);
+Texture3D<float> ObjectTexture11 : register(t12);
+Texture3D<float> ObjectTexture12 : register(t13);
+Texture3D<float> ObjectTexture13 : register(t14);
+Texture3D<float> ObjectTexture14 : register(t15);
+Texture3D<float> ObjectTexture15 : register(t16);
+#else
 Texture3D<float> ObjectsTextures[GLOBAL_SDF_RASTERIZE_MODEL_MAX_COUNT] : register(t1);
+#endif
 
-float DistanceToModelSDF(float minDistance, ObjectRasterizeData modelData, Texture3D<float> modelSDFTex, float3 worldPos)
+float SampleObjectSDF(uint textureIndex, float3 volumeUV, float mipOffset)
+{
+#if defined(PLATFORM_WEB)
+    switch (textureIndex)
+    {
+    case 0: return ObjectTexture0.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 1: return ObjectTexture1.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 2: return ObjectTexture2.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 3: return ObjectTexture3.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 4: return ObjectTexture4.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 5: return ObjectTexture5.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 6: return ObjectTexture6.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 7: return ObjectTexture7.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 8: return ObjectTexture8.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 9: return ObjectTexture9.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 10: return ObjectTexture10.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 11: return ObjectTexture11.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 12: return ObjectTexture12.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 13: return ObjectTexture13.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 14: return ObjectTexture14.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    case 15: return ObjectTexture15.SampleLevel(SamplerPointClamp, volumeUV, mipOffset).x;
+    }
+    return 1.0f;
+#else
+    return ObjectsTextures[textureIndex].SampleLevel(SamplerLinearClamp, volumeUV, mipOffset).x;
+#endif
+}
+
+float DistanceToModelSDF(float minDistance, ObjectRasterizeData modelData, uint textureIndex, float3 worldPos)
 {
     // Object scaling is the length of the rows
     float4x4 volumeToWorld = ToMatrix4x4(modelData.VolumeToWorld);
@@ -107,7 +162,7 @@ float DistanceToModelSDF(float minDistance, ObjectRasterizeData modelData, Textu
 #if defined(PLATFORM_PS4) || defined(PLATFORM_PS5)
     float volumeDistance = 0; // TODO: fix shader compilation error
 #else
-	float volumeDistance = modelSDFTex.SampleLevel(SamplerLinearClamp, volumeUV, modelData.MipOffset).x * modelData.DecodeMul + modelData.DecodeAdd;
+	float volumeDistance = SampleObjectSDF(textureIndex, volumeUV, modelData.MipOffset) * modelData.DecodeMul + modelData.DecodeAdd;
 #endif
 	volumeDistance *= volumeScale; // Apply uniform instance scale (non-uniform is not supported)
 
@@ -122,7 +177,7 @@ float DistanceToModelSDF(float minDistance, ObjectRasterizeData modelData, Textu
 }
 
 // Compute shader for rasterizing model SDF into Global SDF
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(READ_SDF=0)
 META_PERMUTATION_1(READ_SDF=1)
 [numthreads(GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE)]
@@ -132,13 +187,13 @@ void CS_RasterizeModel(uint3 DispatchThreadId : SV_DispatchThreadID)
 	float3 voxelWorldPos = voxelCoord * CascadeCoordToPosMul + CascadeCoordToPosAdd;
 	voxelCoord.x += CascadeIndex * CascadeResolution;
 	float minDistance = MaxDistance;
-#if READ_SDF
+#if READ_SDF && !defined(PLATFORM_WEB)
 	minDistance *= GlobalSDFTex[voxelCoord];
 #endif
 	for (uint i = 0; i < ObjectsCount; i++)
 	{
 		ObjectRasterizeData objectData = ObjectsBuffer[Objects[i / 4][i % 4]];
-		float objectDistance = DistanceToModelSDF(minDistance, objectData, ObjectsTextures[i], voxelWorldPos);
+		float objectDistance = DistanceToModelSDF(minDistance, objectData, i, voxelWorldPos);
 		minDistance = CombineSDF(minDistance, objectDistance);
 	}
 	GlobalSDFTex[voxelCoord] = clamp(minDistance / MaxDistance, -1, 1);
@@ -151,11 +206,13 @@ void CS_RasterizeModel(uint3 DispatchThreadId : SV_DispatchThreadID)
 Texture2D<float4> ObjectsTextures[GLOBAL_SDF_RASTERIZE_HEIGHTFIELD_MAX_COUNT] : register(t1);
 
 // Compute shader for rasterizing heightfield into Global SDF
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE)]
 void CS_RasterizeHeightfield(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
-#if defined(PLATFORM_PS4) || defined(PLATFORM_PS5)
+#if defined(PLATFORM_WEB)
+    return;
+#elif defined(PLATFORM_PS4) || defined(PLATFORM_PS5)
     // TODO: fix shader compilation error
 #else
 	uint3 voxelCoord = ChunkCoord + DispatchThreadId;
@@ -220,10 +277,10 @@ void CS_RasterizeHeightfield(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if defined(_CS_ClearChunk)
 
-RWTexture3D<snorm float> GlobalSDFTex : register(u0);
+GLOBAL_SDF_RW_TEXTURE GlobalSDFTex : register(u0);
 
 // Compute shader for clearing Global SDF chunk
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE, GLOBAL_SDF_RASTERIZE_GROUP_SIZE)]
 void CS_ClearChunk(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -236,8 +293,8 @@ void CS_ClearChunk(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if defined(_CS_GenerateMip)
 
-RWTexture3D<snorm float> GlobalSDFMip : register(u0);
-Texture3D<snorm float> GlobalSDFTex : register(t0);
+GLOBAL_SDF_RW_TEXTURE GlobalSDFMip : register(u0);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t0);
 
 float SampleSDF(uint3 voxelCoordMip, int3 offset)
 {
@@ -245,6 +302,14 @@ float SampleSDF(uint3 voxelCoordMip, int3 offset)
 	voxelCoordMip = (uint3)clamp((int3)(voxelCoordMip * MipCoordScale) + offset, int3(0, 0, 0), (int3)(MipTexResolution - 1));
 	voxelCoordMip.x += MipTexOffsetX;
 	float result = GlobalSDFTex[voxelCoordMip].r;
+#if defined(PLATFORM_WEB)
+    float decodedDistance = result * MipMaxDistanceLoad;
+    float distanceToVoxel = length((float3)offset) * CascadeVoxelSize * ((float)CascadeResolution / (float)MipTexResolution);
+    float combinedDistance = sqrt(Square(max(decodedDistance, 0.0f)) + Square(distanceToVoxel));
+    if (decodedDistance <= 0.0f && distanceToVoxel <= 0.0f)
+        combinedDistance = decodedDistance;
+    result = result >= GLOBAL_SDF_MIN_VALID ? MipMaxDistanceStore : combinedDistance;
+#else
     if (result >= GLOBAL_SDF_MIN_VALID)
         return MipMaxDistanceStore; // No valid distance so use the limit
     result *= MipMaxDistanceLoad; // Decode normalized distance to world-units
@@ -252,12 +317,13 @@ float SampleSDF(uint3 voxelCoordMip, int3 offset)
 	// Extend by distance to the sampled texel location
 	float distanceToVoxel = length((float3)offset) * CascadeVoxelSize * ((float)CascadeResolution / (float)MipTexResolution);
 	result = CombineDistanceToSDF(result, distanceToVoxel);
+#endif
 
 	return result;
 }
 
 // Compute shader for generating mip for Global SDF (uses flood fill algorithm)
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(GLOBAL_SDF_MIP_GROUP_SIZE, GLOBAL_SDF_MIP_GROUP_SIZE, GLOBAL_SDF_MIP_GROUP_SIZE)]
 void CS_GenerateMip(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -280,11 +346,11 @@ void CS_GenerateMip(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #ifdef _PS_Debug
 
-Texture3D<snorm float> GlobalSDFTex : register(t0);
-Texture3D<snorm float> GlobalSDFMip : register(t1);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t0);
+GLOBAL_SDF_TEXTURE GlobalSDFMip : register(t1);
 
 // Pixel shader for Global SDF debug drawing
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 float4 PS_Debug(Quad_VS2PS input) : SV_Target
 {
 #if 0

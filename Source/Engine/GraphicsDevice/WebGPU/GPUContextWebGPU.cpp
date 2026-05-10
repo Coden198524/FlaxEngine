@@ -18,6 +18,8 @@
 #include "Engine/Profiler/ProfilerCPU.h"
 #include "Engine/Profiler/RenderStats.h"
 #include "Engine/Graphics/PixelFormatExtensions.h"
+#include "Engine/Graphics/RenderTools.h"
+#include "Engine/Core/Types/DataContainer.h"
 
 // Ensure to match the indirect commands arguments layout
 static_assert(sizeof(GPUDispatchIndirectArgs) == sizeof(uint32) * 3, "Wrong size of GPUDrawIndirectArgs.");
@@ -37,6 +39,138 @@ static_assert(OFFSET_OF(GPUDrawIndexedIndirectArgs, InstanceCount) == sizeof(uin
 static_assert(OFFSET_OF(GPUDrawIndexedIndirectArgs, StartIndex) == sizeof(uint32) * 2, "Wrong offset for GPUDrawIndexedIndirectArgs::StartIndex");
 static_assert(OFFSET_OF(GPUDrawIndexedIndirectArgs, StartVertex) == sizeof(uint32) * 3, "Wrong offset for GPUDrawIndexedIndirectArgs::StartVertex");
 static_assert(OFFSET_OF(GPUDrawIndexedIndirectArgs, StartInstance) == sizeof(uint32) * 4, "Wrong offset for GPUDrawIndexedIndirectArgs::StartInstance");
+
+namespace
+{
+    bool IsClearZero(const uint32 value[4])
+    {
+        return (value[0] | value[1] | value[2] | value[3]) == 0;
+    }
+
+    bool IsClearZero(const Float4& value)
+    {
+        return value == Float4::Zero;
+    }
+
+    bool WriteClearTexel(PixelFormat format, const Float4& value, void* dst)
+    {
+        switch (format)
+        {
+        case PixelFormat::R32_Float:
+            *(float*)dst = value.X;
+            return true;
+        case PixelFormat::R32G32_Float:
+            ((float*)dst)[0] = value.X;
+            ((float*)dst)[1] = value.Y;
+            return true;
+        case PixelFormat::R32G32B32A32_Float:
+            Platform::MemoryCopy(dst, value.Raw, sizeof(value.Raw));
+            return true;
+        case PixelFormat::R32_UInt:
+        case PixelFormat::R32_SInt:
+            *(uint32*)dst = (uint32)value.X;
+            return true;
+        case PixelFormat::R32G32B32A32_UInt:
+        case PixelFormat::R32G32B32A32_SInt:
+            ((uint32*)dst)[0] = (uint32)value.X;
+            ((uint32*)dst)[1] = (uint32)value.Y;
+            ((uint32*)dst)[2] = (uint32)value.Z;
+            ((uint32*)dst)[3] = (uint32)value.W;
+            return true;
+        default:
+            break;
+        }
+        if (IsClearZero(value))
+        {
+            Platform::MemoryClear(dst, PixelFormatExtensions::SizeInBytes(format));
+            return true;
+        }
+        return false;
+    }
+
+    bool WriteClearTexel(PixelFormat format, const uint32 value[4], void* dst)
+    {
+        switch (format)
+        {
+        case PixelFormat::R32_UInt:
+        case PixelFormat::R32_SInt:
+        case PixelFormat::R32_Float:
+            *(uint32*)dst = value[0];
+            return true;
+        case PixelFormat::R32G32B32A32_UInt:
+        case PixelFormat::R32G32B32A32_SInt:
+        case PixelFormat::R32G32B32A32_Float:
+            Platform::MemoryCopy(dst, value, sizeof(uint32) * 4);
+            return true;
+        default:
+            break;
+        }
+        if (IsClearZero(value))
+        {
+            Platform::MemoryClear(dst, PixelFormatExtensions::SizeInBytes(format));
+            return true;
+        }
+        return false;
+    }
+
+    template<typename ClearValue>
+    void ClearTextureWebGPU(GPUDeviceWebGPU* device, GPUTextureWebGPU* texture, const ClearValue& value)
+    {
+        if (!texture || !texture->Texture)
+            return;
+        if ((texture->Usage & WGPUTextureUsage_CopyDst) == 0)
+        {
+            LOG(Error, "Cannot clear WebGPU texture without CopyDst usage: {}", texture->GetDescription().ToString());
+            return;
+        }
+
+        const PixelFormat format = texture->Format();
+        const int32 texelSize = PixelFormatExtensions::SizeInBytes(format);
+        if (texelSize <= 0 || PixelFormatExtensions::IsCompressed(format) || PixelFormatExtensions::IsDepthStencil(format))
+        {
+            LOG(Error, "Unsupported WebGPU ClearUA texture format: {}", (int32)format);
+            return;
+        }
+
+        int32 width, height, depth;
+        texture->GetMipSize(0, width, height, depth);
+        uint32 rowPitch, slicePitch;
+        RenderTools::ComputePitch(format, width, height, rowPitch, slicePitch);
+        const uint32 totalSize = slicePitch * depth;
+
+        BytesContainer clearData;
+        clearData.Allocate(totalSize);
+        byte texel[16];
+        ASSERT(texelSize <= sizeof(texel));
+        if (!WriteClearTexel(format, value, texel))
+        {
+            LOG(Error, "Unsupported WebGPU ClearUA texture clear for format: {}", (int32)format);
+            return;
+        }
+
+        byte* dst = clearData.Get();
+        for (int32 z = 0; z < depth; z++)
+        {
+            byte* slice = dst + slicePitch * z;
+            for (int32 y = 0; y < height; y++)
+            {
+                byte* row = slice + rowPitch * y;
+                for (int32 x = 0; x < width; x++)
+                    Platform::MemoryCopy(row + x * texelSize, texel, texelSize);
+            }
+        }
+
+        WGPUTexelCopyTextureInfo copyInfo = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+        copyInfo.texture = texture->Texture;
+        copyInfo.mipLevel = 0;
+        copyInfo.aspect = WGPUTextureAspect_All;
+        WGPUTexelCopyBufferLayout dataLayout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+        dataLayout.bytesPerRow = rowPitch;
+        dataLayout.rowsPerImage = height;
+        WGPUExtent3D writeSize = { (uint32_t)width, (uint32_t)height, (uint32_t)depth };
+        wgpuQueueWriteTexture(device->Queue, &copyInfo, clearData.Get(), totalSize, &dataLayout, &writeSize);
+    }
+}
 
 GPUContextWebGPU::GPUContextWebGPU(GPUDeviceWebGPU* device)
     : GPUContext(device)
@@ -172,22 +306,65 @@ void GPUContextWebGPU::ClearDepth(GPUTextureView* depthBuffer, float depthValue,
 
 void GPUContextWebGPU::ClearUA(GPUBuffer* buf, const Float4& value)
 {
-    MISSING_CODE("GPUContextWebGPU::ClearUA");
+    auto bufferWebGPU = (GPUBufferWebGPU*)buf;
+    if (!bufferWebGPU || !bufferWebGPU->Buffer)
+        return;
+
+    if (_renderPass)
+        EndRenderPass();
+
+    const uint32 size = (bufferWebGPU->GetSize() + 3) & ~0x3;
+    if (IsClearZero(value))
+    {
+        wgpuCommandEncoderClearBuffer(Encoder, bufferWebGPU->Buffer, 0, size);
+        return;
+    }
+
+    // TODO: add a compute clear path for large non-zero clears.
+    BytesContainer clearData;
+    clearData.Allocate(size);
+    const uint32 pattern = *(const uint32*)&value.X;
+    for (uint32 offset = 0; offset < size; offset += sizeof(uint32))
+        *(uint32*)(clearData.Get() + offset) = pattern;
+    wgpuQueueWriteBuffer(_device->Queue, bufferWebGPU->Buffer, 0, clearData.Get(), size);
 }
 
 void GPUContextWebGPU::ClearUA(GPUBuffer* buf, const uint32 value[4])
 {
-    MISSING_CODE("GPUContextWebGPU::ClearUA");
+    auto bufferWebGPU = (GPUBufferWebGPU*)buf;
+    if (!bufferWebGPU || !bufferWebGPU->Buffer)
+        return;
+
+    if (_renderPass)
+        EndRenderPass();
+
+    const uint32 size = (bufferWebGPU->GetSize() + 3) & ~0x3;
+    if (IsClearZero(value))
+    {
+        wgpuCommandEncoderClearBuffer(Encoder, bufferWebGPU->Buffer, 0, size);
+        return;
+    }
+
+    // TODO: add support for other components if buffer has them.
+    BytesContainer clearData;
+    clearData.Allocate(size);
+    for (uint32 offset = 0; offset < size; offset += sizeof(uint32))
+        *(uint32*)(clearData.Get() + offset) = value[0];
+    wgpuQueueWriteBuffer(_device->Queue, bufferWebGPU->Buffer, 0, clearData.Get(), size);
 }
 
 void GPUContextWebGPU::ClearUA(GPUTexture* texture, const uint32 value[4])
 {
-    MISSING_CODE("GPUContextWebGPU::ClearUA");
+    if (_renderPass)
+        EndRenderPass();
+    ClearTextureWebGPU(_device, (GPUTextureWebGPU*)texture, value);
 }
 
 void GPUContextWebGPU::ClearUA(GPUTexture* texture, const Float4& value)
 {
-    MISSING_CODE("GPUContextWebGPU::ClearUA");
+    if (_renderPass)
+        EndRenderPass();
+    ClearTextureWebGPU(_device, (GPUTextureWebGPU*)texture, value);
 }
 
 void GPUContextWebGPU::ResetRenderTarget()
@@ -943,13 +1120,14 @@ WGPUComputePassEncoder GPUContextWebGPU::OnDispatch(GPUShaderProgramCS* shader)
     // Set pipeline
     GPUPipelineStateWebGPU::BindGroupKey key;
     auto shaderWebGPU = (GPUShaderProgramCSWebGPU*)shader;
-    WGPUComputePipeline pipeline = shaderWebGPU->GetPipeline(_device->Device, { _shaderResources }, key.Layout);
+    const WGPUSamplerBindingType* samplerTypes = nullptr;
+    WGPUComputePipeline pipeline = shaderWebGPU->GetPipeline(_device->Device, _device->Float32Filterable, { _shaderResources }, key.Layout, samplerTypes);
     wgpuComputePassEncoderSetPipeline(computePass, pipeline);
 
     // Set bind group
     uint32 dynamicOffsets[DynamicOffsetsMax];
     uint32 dynamicOffsetsCount = 0;
-    BuildBindGroup(0, shaderWebGPU->DescriptorInfo, key, dynamicOffsets, dynamicOffsetsCount);
+    BuildBindGroup(0, shaderWebGPU->DescriptorInfo, key, dynamicOffsets, dynamicOffsetsCount, samplerTypes);
     WGPUBindGroup bindGroup = shaderWebGPU->GetBindGroup(_device->Device, key);
     wgpuComputePassEncoderSetBindGroup(computePass, 0, bindGroup, dynamicOffsetsCount, dynamicOffsets);
 
@@ -1099,7 +1277,7 @@ void GPUContextWebGPU::FlushBindGroup()
         // Build descriptors
         uint32 dynamicOffsetsCount = 0;
         if (descriptors)
-            BuildBindGroup(groupIndex, *descriptors, key, dynamicOffsets, dynamicOffsetsCount);
+            BuildBindGroup(groupIndex, *descriptors, key, dynamicOffsets, dynamicOffsetsCount, _pipelineState->BindGroupSamplerTypes[groupIndex]);
         else
             key.EntriesCount = 0;
 
@@ -1134,7 +1312,19 @@ void GPUContextWebGPU::FlushTimestamps(int32 skipLast)
     }
 }
 
-void GPUContextWebGPU::BuildBindGroup(uint32 groupIndex, const SpirvShaderDescriptorInfo& descriptors, GPUPipelineStateWebGPU::BindGroupKey& key, uint32 dynamicOffsets[DynamicOffsetsMax], uint32& dynamicOffsetsCount)
+static GPUSamplerWebGPU* GetNonFilteringSampler(GPUDeviceWebGPU* device, GPUSamplerWebGPU* sampler, int32 slot)
+{
+    if (!sampler)
+        return device->DefaultSamplers[slot == 2 || slot == 3 ? 3 : 1];
+    const auto& desc = sampler->GetDescription();
+    if (desc.Filter == GPUSamplerFilter::Point && desc.ComparisonFunction == GPUSamplerCompareFunction::Never)
+        return sampler;
+    const bool wrap = desc.AddressU == GPUSamplerAddressMode::Wrap && desc.AddressV == GPUSamplerAddressMode::Wrap && desc.AddressW == GPUSamplerAddressMode::Wrap;
+    auto fallback = device->DefaultSamplers[wrap ? 3 : 1];
+    return fallback ? fallback : sampler;
+}
+
+void GPUContextWebGPU::BuildBindGroup(uint32 groupIndex, const SpirvShaderDescriptorInfo& descriptors, GPUPipelineStateWebGPU::BindGroupKey& key, uint32 dynamicOffsets[DynamicOffsetsMax], uint32& dynamicOffsetsCount, const WGPUSamplerBindingType* samplerTypes)
 {
     // Build descriptors for the bind group
     auto entriesCount = descriptors.DescriptorTypesCount;
@@ -1158,11 +1348,12 @@ void GPUContextWebGPU::BuildBindGroup(uint32 groupIndex, const SpirvShaderDescri
             GPUSamplerWebGPU* sampler = _samplers[descriptor.Slot];
             if (!sampler)
                 sampler = _device->DefaultSamplers[0]; // Fallback
+            if (samplerTypes && samplerTypes[descriptor.Slot] == WGPUSamplerBindingType_NonFiltering)
+                sampler = GetNonFilteringSampler(_device, sampler, descriptor.Slot);
             entry.sampler = sampler->Sampler;
             break;
         }
         case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
         {
             ASSERT_LOW_LAYER(descriptor.BindingType == SpirvShaderResourceBindingType::SRV);
             auto view = _shaderResources[descriptor.Slot];
@@ -1185,6 +1376,48 @@ void GPUContextWebGPU::BuildBindGroup(uint32 groupIndex, const SpirvShaderDescri
                 {
                 case SpirvShaderResourceType::Texture3D:
                     view = defaultTexture->ViewVolume();
+                    break;
+                case SpirvShaderResourceType::TextureCube:
+                    view = defaultTexture->ViewCube();
+                    break;
+                case SpirvShaderResourceType::Texture1DArray:
+                case SpirvShaderResourceType::Texture2DArray:
+                    view = defaultTexture->ViewArray();
+                    break;
+                default:
+                    view = defaultTexture->View(0);
+                    break;
+                }
+                ptr = (GPUResourceViewPtrWebGPU*)view->GetNativePtr();
+                entry.textureView = ptr->TextureView->View;
+            }
+            break;
+        }
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        {
+            ASSERT_LOW_LAYER(descriptor.BindingType == SpirvShaderResourceBindingType::UAV);
+            auto view = _storageResources[descriptor.Slot];
+            auto ptr = view ? (GPUResourceViewPtrWebGPU*)view->GetNativePtr() : nullptr;
+            if (ptr && ptr->TextureView)
+            {
+                entry.textureView = ptr->TextureView->View;
+                versionsPtr[index] = ptr->Version;
+            }
+            if (!entry.textureView)
+            {
+                auto defaultTexture = _device->DefaultTexture[(int32)descriptor.ResourceType];
+                if (!defaultTexture)
+                {
+                    LOG(Error, "Missing default storage texture {} at slot {}", (int32)descriptor.ResourceType, descriptor.Slot);
+                    CRASH;
+                }
+                switch (descriptor.ResourceType)
+                {
+                case SpirvShaderResourceType::Texture3D:
+                    view = defaultTexture->ViewVolume();
+                    break;
+                case SpirvShaderResourceType::TextureCube:
+                    view = defaultTexture->ViewCube();
                     break;
                 case SpirvShaderResourceType::Texture1DArray:
                 case SpirvShaderResourceType::Texture2DArray:

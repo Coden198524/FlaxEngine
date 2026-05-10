@@ -557,7 +557,7 @@ bool GlobalSurfaceAtlasPass::Init()
 {
     // Check platform support
     const auto device = GPUDevice::Instance;
-    _supported = device->GetFeatureLevel() >= FeatureLevel::SM5 && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad;
+    _supported = (device->GetFeatureLevel() >= FeatureLevel::SM5 || device->GetShaderProfile() == ShaderProfile::WebGPU) && device->Limits.HasCompute && device->Limits.HasTypedUAVLoad;
     return false;
 }
 
@@ -751,10 +751,10 @@ bool GlobalSurfaceAtlasPass::Render(RenderContext& renderContext, GPUContext* co
         // TODO: store Normals in tile local-space (xy only, z can be reconstructed), then block compress, if ShadingModel==SHADING_MODEL_UNLIT then write empty normal
         // TODO: pack depth in 0-255 range and block compress (should be enough quality for per-object tile trace)
 #define INIT_ATLAS_TEXTURE(texture, format) desc.Format = format; surfaceAtlasData.texture = RenderTargetPool::Get(desc); if (!surfaceAtlasData.texture) return true; memUsage += surfaceAtlasData.texture->GetMemoryUsage(); RENDER_TARGET_POOL_SET_NAME(surfaceAtlasData.texture, "GlobalSurfaceAtlas." #texture);
-        INIT_ATLAS_TEXTURE(AtlasEmissive, PixelFormat::R11G11B10_Float);
+        INIT_ATLAS_TEXTURE(AtlasEmissive, PLATFORM_WEB ? PixelFormat::R16G16B16A16_Float : PixelFormat::R11G11B10_Float);
         INIT_ATLAS_TEXTURE(AtlasGBuffer0, GBUFFER0_FORMAT);
         INIT_ATLAS_TEXTURE(AtlasGBuffer1, GBUFFER1_FORMAT);
-        INIT_ATLAS_TEXTURE(AtlasLighting, PixelFormat::R11G11B10_Float);
+        INIT_ATLAS_TEXTURE(AtlasLighting, PLATFORM_WEB ? PixelFormat::R16G16B16A16_Float : PixelFormat::R11G11B10_Float);
         desc.Flags = GPUTextureFlags::DepthStencil | GPUTextureFlags::ShaderResource;
         INIT_ATLAS_TEXTURE(AtlasDepth, PixelFormat::D16_UNorm);
 #undef INIT_ATLAS_TEXTURE

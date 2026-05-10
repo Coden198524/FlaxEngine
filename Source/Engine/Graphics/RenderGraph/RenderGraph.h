@@ -172,6 +172,11 @@ private:
     /// </summary>
     RenderGraphPass* _currentSetupPass;
 
+    /// <summary>
+    /// Hash of the graph structure (passes and their dependencies) for caching compilation results.
+    /// </summary>
+    uint64 _structureHash;
+
 public:
     /// <summary>
     /// Initializes a new instance of the <see cref="RenderGraph"/> class.
@@ -374,4 +379,10 @@ private:
     /// Releases all allocated resources.
     /// </summary>
     void ReleaseResources();
+
+    /// <summary>
+    /// Computes a hash of the graph structure (passes and dependencies) for caching.
+    /// </summary>
+    /// <returns>The structure hash.</returns>
+    uint64 ComputeStructureHash() const;
 };

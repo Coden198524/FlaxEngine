@@ -404,8 +404,16 @@ namespace ShaderProcessing
             }
             if (missing)
             {
-                parser->OnError(TEXT("Invalid shader function \'minFeatures\' option value."));
-                return;
+                if (token == "FEATURE_LEVEL_SM5_OR_WEBGPU")
+                {
+                    current.MinFeatureLevel = parser->GetProfile() == ShaderProfile::WebGPU ? FeatureLevel::ES3_1 : FeatureLevel::SM5;
+                    missing = false;
+                }
+                else
+                {
+                    parser->OnError(TEXT("Invalid shader function \'minFeatures\' option value."));
+                    return;
+                }
             }
 
             // Read rest of the line

@@ -50,6 +50,11 @@ namespace ShaderProcessing
     public:
 
         /// <summary>
+        /// Gets the target shader profile.
+        /// </summary>
+        virtual ShaderProfile GetProfile() const = 0;
+
+        /// <summary>
         /// Gets the parser feature level of the target platform graphics backend.
         /// </summary>
         /// <returns>The graphics feature level</returns>

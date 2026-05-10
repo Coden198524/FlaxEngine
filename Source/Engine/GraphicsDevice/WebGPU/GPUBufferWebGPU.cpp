@@ -85,7 +85,7 @@ bool GPUBufferWebGPU::OnInit()
         bufferDesc.usage |= WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
         break;
     case GPUResourceUsage::StagingReadback:
-        bufferDesc.usage |= WGPUBufferUsage_MapRead;
+        bufferDesc.usage |= WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
         break;
     case GPUResourceUsage::Staging:
         bufferDesc.usage |= WGPUBufferUsage_MapRead | WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
@@ -122,7 +122,6 @@ void GPUBufferWebGPU::OnReleaseGPU()
 {
     if (Buffer)
     {
-        wgpuBufferDestroy(Buffer);
         wgpuBufferRelease(Buffer);
         Buffer = nullptr;
     }

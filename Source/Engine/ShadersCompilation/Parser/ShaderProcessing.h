@@ -26,6 +26,7 @@ namespace ShaderProcessing
         String targetName;
         Reader text;
         ParserMacros _macros;
+        ShaderProfile _profile;
         FeatureLevel _featureLevel;
         ShaderProfileFeatures _features;
 
@@ -60,6 +61,10 @@ namespace ShaderProcessing
 
     public:
         // [IShaderParser]
+        ShaderProfile GetProfile() const override
+        {
+            return _profile;
+        }
         FeatureLevel GetFeatureLevel() const override
         {
             return _featureLevel;

@@ -239,7 +239,7 @@ float3 QuatRotateVector(float4 q, float3 v)
 float4 SampleUnwrappedTexture3D(Texture2D tex, SamplerState s, float3 uvw, float size)
 {
     float intW = floor(uvw.z * size - 0.5);
-    half fracW = uvw.z * size - 0.5 - intW;
+    float fracW = uvw.z * size - 0.5 - intW;
     float u = (uvw.x + intW) / size;
     float v = uvw.y;
     float4 rg0 = tex.Sample(s, float2(u, v));

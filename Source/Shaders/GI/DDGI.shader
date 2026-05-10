@@ -92,11 +92,11 @@ uint GetProbeRaysCount(DDGIData data, float probeAttention)
 
 #ifdef _CS_Classify
 
-RWTexture2D<snorm float4> RWProbesData : register(u0);
+DDGI_PROBES_DATA_RW_TEXTURE RWProbesData : register(u0);
 RWByteAddressBuffer RWActiveProbes : register(u1);
 
-Texture3D<snorm float> GlobalSDFTex : register(t0);
-Texture3D<snorm float> GlobalSDFMip : register(t1);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t0);
+GLOBAL_SDF_TEXTURE GlobalSDFMip : register(t1);
 
 float3 Remap(float3 value, float3 fromMin, float3 fromMax, float3 toMin, float3 toMax)
 {
@@ -109,7 +109,7 @@ bool IsProbeAtBorder(uint3 probeCoords)
 }
 
 // Compute shader for updating probes state between active and inactive and performing probes relocation.
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(DDGI_PROBE_CLASSIFY_GROUP_SIZE, 1, 1)]
 void CS_Classify(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -333,7 +333,7 @@ void CS_Classify(uint3 DispatchThreadId : SV_DispatchThreadID)
     if (probeState != DDGI_PROBE_STATE_INACTIVE)
     {
         uint activeProbeIndex;
-        RWActiveProbes.InterlockedAdd(0, 1, activeProbeIndex); // Counter at 0
+        RWActiveProbes.InterlockedAdd(0u, 1u, activeProbeIndex); // Counter at 0
         RWActiveProbes.Store(activeProbeIndex * 4 + 4, DispatchThreadId.x);
     }
 }
@@ -346,7 +346,7 @@ RWBuffer<uint> UpdateProbesInitArgs : register(u0);
 ByteAddressBuffer ActiveProbes : register(t0);
 
 // Compute shader for building indirect dispatch arguments for CS_TraceRays and CS_UpdateProbes.
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(1, 1, 1)]
 void CS_UpdateProbesInitArgs()
 {
@@ -366,7 +366,7 @@ void CS_UpdateProbesInitArgs()
 
 #ifdef _CS_UpdateInactiveProbes
 
-RWTexture2D<snorm float4> RWProbesData : register(u0);
+DDGI_PROBES_DATA_RW_TEXTURE RWProbesData : register(u0);
 
 void CheckNearbyProbe(inout uint3 fallbackCoords, inout uint probeState, inout float minDistance, uint3 probeCoords, int3 probeCoordsEnd, int3 offset)
 {
@@ -395,7 +395,7 @@ void CheckNearbyProbe(inout uint3 fallbackCoords, inout uint probeState, inout f
 
 // Compute shader to store closest valid probe coords inside inactive probes data for quick fallback lookup when sampling irradiance.
 // Uses Jump Flood algorithm.
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(DDGI_PROBE_CLASSIFY_GROUP_SIZE, 1, 1)]
 void CS_UpdateInactiveProbes(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -423,8 +423,12 @@ void CS_UpdateInactiveProbes(uint3 DispatchThreadId : SV_DispatchThreadID)
         }
     }
 
-    // Ensure all threads (within dispatch) got proper data before writing back to the same memory
+    // Ensure all threads (within group) got proper data before writing back to the same memory
+#if defined(PLATFORM_WEB)
+    GroupMemoryBarrierWithGroupSync();
+#else
     AllMemoryBarrierWithGroupSync();
+#endif
 
     // Write modified probe data back (remain inactive)
     BRANCH
@@ -443,19 +447,19 @@ RWTexture2D<float4> RWProbesTrace : register(u0);
 RWByteAddressBuffer RWStats : register(u1);
 #endif
 
-Texture3D<snorm float> GlobalSDFTex : register(t0);
-Texture3D<snorm float> GlobalSDFMip : register(t1);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t0);
+GLOBAL_SDF_TEXTURE GlobalSDFMip : register(t1);
 ByteAddressBuffer GlobalSurfaceAtlasChunks : register(t2);
 ByteAddressBuffer RWGlobalSurfaceAtlasCulledObjects : register(t3);
 Buffer<float4> GlobalSurfaceAtlasObjects : register(t4);
 Texture2D GlobalSurfaceAtlasDepth : register(t5);
 Texture2D GlobalSurfaceAtlasTex : register(t6);
-Texture2D<snorm float4> ProbesData : register(t7);
+DDGI_PROBES_DATA_TEXTURE ProbesData : register(t7);
 TextureCube Skybox : register(t8);
 ByteAddressBuffer ActiveProbes : register(t9);
 
 // Compute shader for tracing rays for probes using Global SDF and Global Surface Atlas (1 ray per-thread).
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(DDGI_TRACE_RAYS_COUNT=96)
 META_PERMUTATION_1(DDGI_TRACE_RAYS_COUNT=128)
 META_PERMUTATION_1(DDGI_TRACE_RAYS_COUNT=192)
@@ -522,9 +526,9 @@ void CS_TraceRays(uint3 DispatchThreadId : SV_DispatchThreadID)
 #if DDGI_DEBUG_STATS
     // Update stats
     uint tmp;
-    RWStats.InterlockedAdd(0, 1, tmp);
+    RWStats.InterlockedAdd(0u, 1u, tmp);
     if (rayIndex == 0)
-        RWStats.InterlockedAdd(4, 1, tmp);
+        RWStats.InterlockedAdd(4u, 1u, tmp);
 #endif
 }
 
@@ -655,18 +659,18 @@ groupshared float3 CachedProbesTraceDirection[DDGI_TRACE_RAYS_LIMIT];
 
 RWTexture2D<float4> RWOutput : register(u0);
 #if DDGI_PROBE_UPDATE_MODE == 0
-RWTexture2D<snorm float4> RWProbesData : register(u1);
+DDGI_PROBES_DATA_RW_TEXTURE RWProbesData : register(u1);
 #if DDGI_DEBUG_INSTABILITY
 RWTexture2D<float> RWOutputInstability : register(u2);
 #endif
 #else
-Texture2D<snorm float4> ProbesData : register(t0);
+DDGI_PROBES_DATA_TEXTURE ProbesData : register(t0);
 #endif
 Texture2D<float4> ProbesTrace : register(t1);
 ByteAddressBuffer ActiveProbes : register(t2);
 
 // Compute shader for updating probes irradiance or distance texture.
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(DDGI_PROBE_UPDATE_MODE=0)
 META_PERMUTATION_1(DDGI_PROBE_UPDATE_MODE=1)
 [numthreads(DDGI_PROBE_RESOLUTION, DDGI_PROBE_RESOLUTION, 1)]
@@ -881,12 +885,12 @@ void CS_UpdateProbes(uint3 GroupThreadId : SV_GroupThreadID, uint3 GroupId : SV_
 #include "./Flax/Random.hlsl"
 #include "./Flax/LightingCommon.hlsl"
 
-Texture2D<snorm float4> ProbesData : register(t4);
+DDGI_PROBES_DATA_TEXTURE ProbesData : register(t4);
 Texture2D<float4> ProbesDistance : register(t5);
 Texture2D<float4> ProbesIrradiance : register(t6);
 
 // Pixel shader for drawing indirect lighting in fullscreen
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(DDGI_CASCADE_BLEND_SMOOTH=0)
 META_PERMUTATION_1(DDGI_CASCADE_BLEND_SMOOTH=1)
 void PS_IndirectLighting(Quad_VS2PS input, out float4 output : SV_Target0)

@@ -17,7 +17,7 @@ public class GraphicsDeviceWebGPU : GraphicsDeviceBaseModule
     /// 1 - via Asyncify (causes the WASM to be much larger) <br/>
     /// 2 - via JSPI (experimental) <br/>
     /// </summary>
-    public static int WithAsyncify = 2;
+    public static int WithAsyncify = 1;
 
     /// <inheritdoc />
     public override void Setup(BuildOptions options)

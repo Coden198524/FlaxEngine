@@ -294,6 +294,7 @@ bool GPUDeviceWebGPU::Init()
     {
         MinUniformBufferOffsetAlignment = limits.minUniformBufferOffsetAlignment;
         TimestampQuery = features.Contains(WGPUFeatureName_TimestampQuery);
+        Float32Filterable = features.Contains(WGPUFeatureName_Float32Filterable);
         Limits.HasCompute =
             limits.maxStorageBuffersPerShaderStage >= GPU_MAX_UA_BINDED &&
             limits.maxStorageTexturesPerShaderStage >= GPU_MAX_UA_BINDED &&
@@ -306,6 +307,7 @@ bool GPUDeviceWebGPU::Init()
         Limits.HasDrawIndirect = true;
         Limits.HasDepthAsSRV = true;
         Limits.HasReadOnlyDepth = true;
+        Limits.HasTypedUAVLoad = wgpuInstanceHasWGSLLanguageFeature(WebGPUInstance, WGPUWGSLLanguageFeatureName_ReadonlyAndReadwriteStorageTextures);
         Limits.HasDepthClip = features.Contains(WGPUFeatureName_DepthClipControl);
         Limits.MaximumSamplerAnisotropy = 4;
         Limits.MaximumTexture1DSize = limits.maxTextureDimension1D;
@@ -445,6 +447,7 @@ bool GPUDeviceWebGPU::Init()
             FeaturesPerFormat[(int32)PixelFormat::R16G16B16A16_UInt].Support |= FormatSupport::UnorderedAccessReadWrite;
             FeaturesPerFormat[(int32)PixelFormat::R16G16B16A16_SInt].Support |= FormatSupport::UnorderedAccessReadWrite;
             FeaturesPerFormat[(int32)PixelFormat::R16G16B16A16_Float].Support |= FormatSupport::UnorderedAccessReadWrite;
+            FeaturesPerFormat[(int32)PixelFormat::R32_Float].Support |= FormatSupport::UnorderedAccessReadWrite;
             FeaturesPerFormat[(int32)PixelFormat::R32G32B32A32_UInt].Support |= FormatSupport::UnorderedAccessReadWrite;
             FeaturesPerFormat[(int32)PixelFormat::R32G32B32A32_SInt].Support |= FormatSupport::UnorderedAccessReadWrite;
             FeaturesPerFormat[(int32)PixelFormat::R32G32B32A32_Float].Support |= FormatSupport::UnorderedAccessReadWrite;
@@ -684,9 +687,9 @@ void GPUDeviceWebGPU::DrawBegin()
     DefaultTexture[(int32)SpirvShaderResourceType::type] = texture; \
     texture->Init(desc); \
     texture->SetResidentMipLevels(1)
-        INIT_TEXTURE(Texture2D, GPUTextureDescription::New2D(1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource));
-        INIT_TEXTURE(Texture3D, GPUTextureDescription::New3D(1, 1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource));
-        INIT_TEXTURE(TextureCube, GPUTextureDescription::NewCube(1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource));
+        INIT_TEXTURE(Texture2D, GPUTextureDescription::New2D(1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::UnorderedAccess));
+        INIT_TEXTURE(Texture3D, GPUTextureDescription::New3D(1, 1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::UnorderedAccess));
+        INIT_TEXTURE(TextureCube, GPUTextureDescription::NewCube(1, 1, PixelFormat::R8G8B8A8_UNorm, GPUTextureFlags::ShaderResource | GPUTextureFlags::UnorderedAccess));
 #undef INIT_TEXTURE
         
     }

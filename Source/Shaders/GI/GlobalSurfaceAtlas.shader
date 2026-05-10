@@ -39,7 +39,7 @@ struct AtlasVertexOutput
 };
 
 // Vertex shader for Global Surface Atlas rendering (custom vertex buffer to render per-tile)
-META_VS(true, FEATURE_LEVEL_SM5)
+META_VS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 AtlasVertexOutput VS_Atlas(AtlasVertexInput input)
 {
 	AtlasVertexOutput output;
@@ -50,7 +50,7 @@ AtlasVertexOutput VS_Atlas(AtlasVertexInput input)
 }
 
 // Pixel shader for Global Surface Atlas software clearing
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 void PS_Clear(out float4 Light : SV_Target0, out float4 RT0 : SV_Target1, out float4 RT1 : SV_Target2, out float4 RT2 : SV_Target3)
 {
 	Light = float4(0, 0, 0, 0);
@@ -65,7 +65,7 @@ Buffer<float4> GlobalSurfaceAtlasObjects : register(t4);
 Texture2D Texture : register(t7);
 
 // Pixel shader for Global Surface Atlas clearing
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 float4 PS_ClearLighting(AtlasVertexOutput input) : SV_Target
 {
 	GlobalSurfaceTile tile = LoadGlobalSurfaceAtlasTile(GlobalSurfaceAtlasObjects, input.TileAddress);
@@ -84,16 +84,16 @@ float4 PS_ClearLighting(AtlasVertexOutput input) : SV_Target
 // GBuffer+Depth at 0-3 slots
 Buffer<float4> GlobalSurfaceAtlasObjects : register(t4);
 #if INDIRECT_LIGHT
-Texture2D<snorm float4> ProbesData : register(t5);
+DDGI_PROBES_DATA_TEXTURE ProbesData : register(t5);
 Texture2D<float4> ProbesDistance : register(t6);
 Texture2D<float4> ProbesIrradiance : register(t7);
 #else
-Texture3D<snorm float> GlobalSDFTex : register(t5);
-Texture3D<snorm float> GlobalSDFMip : register(t6);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t5);
+GLOBAL_SDF_TEXTURE GlobalSDFMip : register(t6);
 #endif
 
 // Pixel shader for Global Surface Atlas shading
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(RADIAL_LIGHT=0)
 META_PERMUTATION_1(RADIAL_LIGHT=1)
 META_PERMUTATION_1(INDIRECT_LIGHT=1)
@@ -214,7 +214,7 @@ groupshared uint SharedCulledObjectsCount;
 groupshared uint SharedCulledObjects[GLOBAL_SURFACE_ATLAS_SHARED_CULL_SIZE];
 
 // Compute shader for culling objects into chunks
-META_CS(true, FEATURE_LEVEL_SM5)
+META_CS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 [numthreads(GLOBAL_SURFACE_ATLAS_CHUNKS_GROUP_SIZE, GLOBAL_SURFACE_ATLAS_CHUNKS_GROUP_SIZE, GLOBAL_SURFACE_ATLAS_CHUNKS_GROUP_SIZE)]
 void CS_CullObjects(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId : SV_GroupID, uint3 GroupThreadId : SV_GroupThreadID)
 {
@@ -303,8 +303,8 @@ void CS_CullObjects(uint3 DispatchThreadId : SV_DispatchThreadID, uint3 GroupId 
 
 #ifdef _PS_Debug
 
-Texture3D<snorm float> GlobalSDFTex : register(t0);
-Texture3D<snorm float> GlobalSDFMip : register(t1);
+GLOBAL_SDF_TEXTURE GlobalSDFTex : register(t0);
+GLOBAL_SDF_TEXTURE GlobalSDFMip : register(t1);
 ByteAddressBuffer GlobalSurfaceAtlasChunks : register(t2);
 ByteAddressBuffer GlobalSurfaceAtlasCulledObjects : register(t3);
 Buffer<float4> GlobalSurfaceAtlasObjects : register(t4);
@@ -313,7 +313,7 @@ Texture2D GlobalSurfaceAtlasDepth : register(t6);
 TextureCube Skybox : register(t7);
 
 // Pixel shader for Global Surface Atlas debug drawing
-META_PS(true, FEATURE_LEVEL_SM5)
+META_PS(true, FEATURE_LEVEL_SM5_OR_WEBGPU)
 META_PERMUTATION_1(GLOBAL_SURFACE_ATLAS_DEBUG_MODE=0)
 META_PERMUTATION_1(GLOBAL_SURFACE_ATLAS_DEBUG_MODE=1)
 float4 PS_Debug(Quad_VS2PS input) : SV_Target

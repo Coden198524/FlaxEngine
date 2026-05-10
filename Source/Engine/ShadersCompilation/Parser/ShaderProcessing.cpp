@@ -23,6 +23,7 @@ ShaderProcessing::Parser::Parser(const String& targetName, const char* source, i
     , targetName(targetName)
     , text(source, sourceLength)
     , _macros(macros)
+    , _profile(profile)
     , _featureLevel(RenderTools::GetFeatureLevel(profile))
     , _features(RenderTools::GetShaderProfileFeatures(profile))
 {

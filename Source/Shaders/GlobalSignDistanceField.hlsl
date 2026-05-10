@@ -11,7 +11,15 @@
 #define GLOBAL_SDF_WORLD_SIZE 60000.0f
 #define GLOBAL_SDF_MIN_VALID 0.9f
 #define GLOBAL_SDF_CHUNK_MARGIN_SCALE 4.0f
+#if defined(PLATFORM_WEB)
+#define GLOBAL_SDF_SAMPLER SamplerPointClamp
+#define GLOBAL_SDF_TEXTURE Texture3D<float>
+#define GLOBAL_SDF_RW_TEXTURE RWTexture3D<float>
+#else
 #define GLOBAL_SDF_SAMPLER SamplerLinearClamp
+#define GLOBAL_SDF_TEXTURE Texture3D<snorm float>
+#define GLOBAL_SDF_RW_TEXTURE RWTexture3D<snorm float>
+#endif
 
 // Global SDF data for a constant buffer
 struct GlobalSDFData
@@ -105,7 +113,7 @@ uint GetGlobalSDFCascade(const GlobalSDFData data, float3 worldPosition)
 }
 
 // Samples the Global SDF cascade and returns the distance to the closest surface (in world units) at the given world location.
-float SampleGlobalSDFCascade(const GlobalSDFData data, Texture3D<snorm float> tex, float3 worldPosition, uint cascade)
+float SampleGlobalSDFCascade(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, float3 worldPosition, uint cascade)
 {
     float distance = GLOBAL_SDF_WORLD_SIZE;
     float3 cascadeUV, textureUV;
@@ -120,7 +128,7 @@ float SampleGlobalSDFCascade(const GlobalSDFData data, Texture3D<snorm float> te
 }
 
 // Samples the Global SDF and returns the distance to the closest surface (in world units) at the given world location.
-float SampleGlobalSDF(const GlobalSDFData data, Texture3D<snorm float> tex, float3 worldPosition)
+float SampleGlobalSDF(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, float3 worldPosition)
 {
     float distance = data.CascadePosDistance[3].w * 2.0f;
     if (distance <= 0.0f)
@@ -143,7 +151,7 @@ float SampleGlobalSDF(const GlobalSDFData data, Texture3D<snorm float> tex, floa
 }
 
 // Samples the Global SDF and returns the distance to the closest surface (in world units) at the given world location.
-float SampleGlobalSDF(const GlobalSDFData data, Texture3D<snorm float> tex, Texture3D<snorm float> mip, float3 worldPosition, uint startCascade = 0)
+float SampleGlobalSDF(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, GLOBAL_SDF_TEXTURE mip, float3 worldPosition, uint startCascade = 0)
 {
     float distance = data.CascadePosDistance[3].w * 2.0f;
     if (distance <= 0.0f)
@@ -172,7 +180,7 @@ float SampleGlobalSDF(const GlobalSDFData data, Texture3D<snorm float> tex, Text
 }
 
 // Samples the Global SDF and returns the gradient vector (derivative) at the given world location. Normalize it to get normal vector.
-float3 SampleGlobalSDFGradient(const GlobalSDFData data, Texture3D<snorm float> tex, float3 worldPosition, out float distance, uint startCascade = 0)
+float3 SampleGlobalSDFGradient(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, float3 worldPosition, out float distance, uint startCascade = 0)
 {
     float3 gradient = float3(0, 0.00001f, 0);
     distance = GLOBAL_SDF_WORLD_SIZE;
@@ -206,7 +214,7 @@ float3 SampleGlobalSDFGradient(const GlobalSDFData data, Texture3D<snorm float> 
 }
 
 // Samples the Global SDF and returns the gradient vector (derivative) at the given world location. Normalize it to get normal vector.
-float3 SampleGlobalSDFGradient(const GlobalSDFData data, Texture3D<snorm float> tex, Texture3D<snorm float> mip, float3 worldPosition, out float distance, uint startCascade = 0)
+float3 SampleGlobalSDFGradient(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, GLOBAL_SDF_TEXTURE mip, float3 worldPosition, out float distance, uint startCascade = 0)
 {
     float3 gradient = float3(0, 0.00001f, 0);
     distance = GLOBAL_SDF_WORLD_SIZE;
@@ -260,7 +268,7 @@ float3 SampleGlobalSDFGradient(const GlobalSDFData data, Texture3D<snorm float> 
 
 // Ray traces the Global SDF.
 // cascadeTraceStartBias - scales the trace start position offset (along the trace direction) by cascade voxel size (reduces artifacts on far cascades). Use it for shadow rays to prevent self-occlusion when tracing from object surface that looses quality in far cascades.
-GlobalSDFHit RayTraceGlobalSDF(const GlobalSDFData data, Texture3D<snorm float> tex, Texture3D<snorm float> mip, const GlobalSDFTrace trace, float cascadeTraceStartBias = 0.0f)
+GlobalSDFHit RayTraceGlobalSDF(const GlobalSDFData data, GLOBAL_SDF_TEXTURE tex, GLOBAL_SDF_TEXTURE mip, const GlobalSDFTrace trace, float cascadeTraceStartBias = 0.0f)
 {
     GlobalSDFHit hit = (GlobalSDFHit)0;
     hit.HitTime = -1.0f;
