@@ -175,4 +175,13 @@ private:
     /// <param name="previousPass">The previous pass.</param>
     /// <param name="currentPass">The current pass.</param>
     void InsertSynchronization(GPUContext* context, RenderGraphPass* previousPass, RenderGraphPass* currentPass);
+
+    /// <summary>
+    /// Checks if resource binding state needs to be reset between two passes.
+    /// Detects potential resource conflicts (e.g., write-after-read, read-after-write).
+    /// </summary>
+    /// <param name="prevPass">The previous pass (can be null for first pass).</param>
+    /// <param name="currPass">The current pass.</param>
+    /// <returns>True if reset is needed to avoid resource binding conflicts.</returns>
+    bool NeedsReset(RenderGraphPass* prevPass, RenderGraphPass* currPass) const;
 };

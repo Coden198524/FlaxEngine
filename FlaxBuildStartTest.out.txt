@@ -1,0 +1,158 @@
+Usage: Flax.Build.exe [options]
+Options:
+  -runDotNetAOT
+
+  -runDotNetClassLibStripping
+
+  -printDotNetRuntime
+	Prints all .NET Runtimes found on system (use plaform/arch switches to filter results).
+
+  -printSDKs
+	Prints all SDKs found on system. Can be used to query Win10 SDK or any other platform-specific toolsets used by build tool.
+
+  -aotMode
+
+  -skipUnusedDotnetLibs
+
+  -workspace=<path>
+	The custom working directory.
+
+  -genproject
+	Generates the projects for the workspace.
+
+  -BuildDeps
+	Runs the deps building tool to fetch and compiles the 3rd party files to produce binaries (build missing ones).
+
+  -ReBuildDeps
+	Runs the deps building tool to fetch and compiles the 3rd party files to produce binaries (force rebuild).
+
+  -deploy
+	Runs the deploy tool.
+
+  -build
+	Builds the targets.
+
+  -clean
+	Cleans the build system cache.
+
+  -rebuild
+	Rebuilds the targets.
+
+  -printPlugins
+	Prints all build system plugins.
+
+  -buildtargets=<target1>,<target2>,<target3>...
+	The custom set of targets to build.
+
+  -skiptargets=<target1>,<target2>,<target3>...
+	The custom set of targets to skip during building. Can be used to skip building engine when building game modules.
+
+  -configuration=Debug
+	The target configuration to build. If not specified builds all supported configurations.
+
+  -platform=Windows
+	The target platform to build. If not specified builds all supported platforms.
+
+  -arch=<x64/x86/arm/arm64>
+	The target platform architecture to build. If not specified builds all valid architectures.
+
+  -mutex
+	Enables using guard mutex to prevent running multiple instances of the tool.
+
+  -log
+	Enables logging into console.
+
+  -logMessagesOnly
+	Enables logging only messages into console (general info logs will be ignored).
+
+  -verbose
+	Enables verbose logging and detailed diagnostics.
+
+  -perf
+	Enables build steps timing diagnostics.
+
+  -traceEventFile=<path>
+	Outputs the Trace Event file (in Json format) with performance events for build system profiling.
+
+  -logfile=<path>
+	The log file path relative to the working directory. Set to empty to disable it.
+
+  -logFileWithConsole
+	Enables logging only console output to the log file (instead whole output).
+
+  -maxConcurrency=<threads>
+	The maximum allowed concurrency for a build system (maximum active worker threads count).
+
+  -concurrencyProcessorScale=<scale>
+	The concurrency scale for a build system that specifies how many worker threads allocate per-logical processor.
+
+  -binaries=<path>
+	The output binaries folder path relative to the working directory.
+
+  -intermediate=<path>
+	The intermediate build files folder path relative to the working directory.
+
+  -hotreload=<postfix>
+	If non-empty, marks the build as hot-reload for modules reloading at runtime and adds the specified postfix to the output binaries names to prevent file collisions with existing modules.
+
+  -BuildBindingsOnly
+	If set, forces targets to build only bindings (C# binaries-only).
+
+  -vs2015
+	Generates Visual Studio 2015 project format files. Valid only with -genproject option.
+
+  -vs2017
+	Generates Visual Studio 2017 project format files. Valid only with -genproject option.
+
+  -vs2019
+	Generates Visual Studio 2019 project format files. Valid only with -genproject option.
+
+  -vs2022
+	Generates Visual Studio 2022 project format files. Valid only with -genproject option.
+
+  -vs2026
+	Generates Visual Studio 2026 project format files. Valid only with -genproject option.
+
+  -vscode
+	Generates Visual Studio Code project format files. Valid only with -genproject option.
+
+  -rider
+	Generates Visual Studio 2022 project format files for Rider. Valid only with -genproject option.
+
+  -customProjectFormat=<type>
+	Generates code project files for a custom project format type. Valid only with -genproject option.
+
+  -compiler=<name>
+	Overrides the compiler to use for building. Eg. v140 overrides the toolset when building for Windows.
+
+  -sanitizers=<name>
+	Selects a sanitizers to use (as flags). Options: Address, Thread.
+
+  -dotnet=<ver>
+	Specifies the dotnet SDK version to use for the build. Eg. set to '7' to use .NET 7 even if .NET 8 is installed.
+
+  -deployDontCompress
+	Skips compressing deployed files, and keeps files.
+
+  -deployOutput
+	Package deployment output path.
+
+  -deployEditor
+	Builds and packages the editor.
+
+  -deployPlatforms
+	Builds and packages the platforms data.
+
+  -deployCert
+	Certificate file path or signer identity for binaries code signing.
+
+  -deployCertPass
+	Certificate password for binaries code signing.
+
+  -deployKeychainProfile
+	Apple keychain profile name to use for app notarize action (installed locally).
+
+  -depsToBuild=<package1,package2>
+	The deps to build. Separated by ',' char. Empty if build all deps.
+
+

@@ -30,7 +30,7 @@ bool RenderGraphExecutor::Execute(RenderGraph* graph, RenderGraphCompiler* compi
     // Get sorted passes from compiler
     const auto& sortedPasses = compiler->GetSortedPasses();
 
-    // Reset state once at the beginning to ensure clean slate
+    // Reset state at the beginning to ensure clean slate
     context->ResetRenderTarget();
     context->ResetSR();
     context->ResetUA();
@@ -52,13 +52,21 @@ bool RenderGraphExecutor::Execute(RenderGraph* graph, RenderGraphCompiler* compi
         // Transition resources to required states
         TransitionResources(graph, pass, context);
 
+        // Intelligently reset state only when needed to avoid resource conflicts
+        if (NeedsReset(previousPass, pass))
+        {
+            context->ResetRenderTarget();
+            context->ResetSR();
+            context->ResetUA();
+        }
+
         // Execute the pass
         ExecutePass(graph, pass, context);
 
         previousPass = pass;
     }
 
-    // Reset state once at the end to clean up
+    // Reset state at the end to clean up
     context->ResetRenderTarget();
     context->ResetSR();
     context->ResetUA();
@@ -303,4 +311,90 @@ void RenderGraphExecutor::InsertSynchronization(GPUContext* context, RenderGraph
             context->FlushState();
         }
     }
+}
+
+bool RenderGraphExecutor::NeedsReset(RenderGraphPass* previousPass, RenderGraphPass* currentPass) const
+{
+    // Always reset on first pass
+    if (!previousPass)
+        return true;
+
+    // Check for texture conflicts: current pass reads what previous pass wrote as RT
+    for (int32 i = 0; i < currentPass->_textureReads.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_textureWrites.Count(); j++)
+        {
+            if (currentPass->_textureReads[i] == previousPass->_textureWrites[j])
+            {
+                // Resource conflict: previous pass wrote to RT/UAV, current pass reads as SR
+                return true;
+            }
+        }
+    }
+
+    // Check for buffer conflicts: current pass reads what previous pass wrote
+    for (int32 i = 0; i < currentPass->_bufferReads.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_bufferWrites.Count(); j++)
+        {
+            if (currentPass->_bufferReads[i] == previousPass->_bufferWrites[j])
+            {
+                // Resource conflict: previous pass wrote to UAV, current pass reads as SR
+                return true;
+            }
+        }
+    }
+
+    // Check for write-after-read conflicts: current pass writes what previous pass read
+    for (int32 i = 0; i < currentPass->_textureWrites.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_textureReads.Count(); j++)
+        {
+            if (currentPass->_textureWrites[i] == previousPass->_textureReads[j])
+            {
+                // Resource conflict: previous pass read as SR, current pass writes as RT/UAV
+                return true;
+            }
+        }
+    }
+
+    for (int32 i = 0; i < currentPass->_bufferWrites.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_bufferReads.Count(); j++)
+        {
+            if (currentPass->_bufferWrites[i] == previousPass->_bufferReads[j])
+            {
+                // Resource conflict: previous pass read as SR, current pass writes as UAV
+                return true;
+            }
+        }
+    }
+
+    // Check for write-after-write conflicts: both passes write to same resource
+    for (int32 i = 0; i < currentPass->_textureWrites.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_textureWrites.Count(); j++)
+        {
+            if (currentPass->_textureWrites[i] == previousPass->_textureWrites[j])
+            {
+                // Resource conflict: both passes write to same resource
+                return true;
+            }
+        }
+    }
+
+    for (int32 i = 0; i < currentPass->_bufferWrites.Count(); i++)
+    {
+        for (int32 j = 0; j < previousPass->_bufferWrites.Count(); j++)
+        {
+            if (currentPass->_bufferWrites[i] == previousPass->_bufferWrites[j])
+            {
+                // Resource conflict: both passes write to same resource
+                return true;
+            }
+        }
+    }
+
+    // No conflicts detected, no reset needed
+    return false;
 }

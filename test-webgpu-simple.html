@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WebGPU R32Float Test</title>
+</head>
+<body>
+    <h1>WebGPU R32Float Texture Test</h1>
+    <div id="output"></div>
+    <script>
+        const output = document.getElementById('output');
+
+        async function testWebGPU() {
+            output.innerHTML += '<p>Testing WebGPU R32Float texture support...</p>';
+
+            if (!navigator.gpu) {
+                output.innerHTML += '<p style="color:red">WebGPU not supported!</p>';
+                return;
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                output.innerHTML += '<p style="color:red">No WebGPU adapter found!</p>';
+                return;
+            }
+
+            output.innerHTML += '<p>Adapter found: ' + adapter.info.description + '</p>';
+
+            // Check for float32-filterable feature
+            const hasFloat32Filterable = adapter.features.has('float32-filterable');
+            output.innerHTML += '<p>float32-filterable feature: ' + (hasFloat32Filterable ? '<span style="color:green">SUPPORTED</span>' : '<span style="color:orange">NOT SUPPORTED</span>') + '</p>';
+
+            // Request device
+            const device = await adapter.requestDevice({
+                requiredFeatures: hasFloat32Filterable ? ['float32-filterable'] : []
+            });
+
+            output.innerHTML += '<p>Device created successfully</p>';
+
+            // Create R32Float texture
+            const texture = device.createTexture({
+                size: [256, 256, 1],
+                format: 'r32float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+            });
+
+            output.innerHTML += '<p>R32Float texture created</p>';
+
+            // Create texture view
+            const textureView = texture.createView();
+            output.innerHTML += '<p>Texture view created</p>';
+
+            // Try to create bind group layout with Float sample type (even without float32-filterable)
+            try {
+                const bindGroupLayout = device.createBindGroupLayout({
+                    entries: [{
+                        binding: 0,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {
+                            sampleType: 'float',  // Force float type
+                            viewDimension: '2d'
+                        }
+                    }]
+                });
+                output.innerHTML += '<p style="color:green">✓ BindGroupLayout with Float sampleType created successfully!</p>';
+
+                // Try to create bind group
+                const sampler = device.createSampler({
+                    magFilter: 'linear',
+                    minFilter: 'linear'
+                });
+
+                const bindGroup = device.createBindGroup({
+                    layout: bindGroupLayout,
+                    entries: [{
+                        binding: 0,
+                        resource: textureView
+                    }]
+                });
+                output.innerHTML += '<p style="color:green">✓ BindGroup created successfully!</p>';
+                output.innerHTML += '<p style="color:green;font-weight:bold">TEST PASSED: R32Float with Float sampleType works!</p>';
+
+            } catch (e) {
+                output.innerHTML += '<p style="color:red">✗ Error creating bind group: ' + e.message + '</p>';
+                output.innerHTML += '<p style="color:red;font-weight:bold">TEST FAILED</p>';
+            }
+
+            // Cleanup
+            texture.destroy();
+            device.destroy();
+        }
+
+        testWebGPU().catch(e => {
+            output.innerHTML += '<p style="color:red">Error: ' + e.message + '</p>';
+        });
+    </script>
+</body>
+</html>

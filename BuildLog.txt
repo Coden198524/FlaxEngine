@@ -1,0 +1,642 @@
+[00:00:003] Flax.Build 1.0.0
+[00:00:004]   Arguments: log -logfile=BuildLog.txt -build -platform=Web -arch=x86 -configuration=Development -buildtargets=FlaxGame -skiptargets=FlaxEditor -clean
+[00:00:004]   Workspace: E:\Work\FlaxEngine
+[00:00:004]   Engine: E:\Work\FlaxEngine
+[00:00:004]   .NET 9.0.10
+[00:00:012] Loading project file from "E:\Work\FlaxEngine\Flax.flaxproj"...
+[00:00:021] Loaded project Flax, version 1.12.6912
+[00:00:036] Engine build version: 1.12.6912
+[00:00:593] Assembler time: 0.5470991s
+[00:00:602] Found Android SDK at C:\Program Files (x86)\Android\android-sdk
+[00:00:602] Missing Linux Toolchain. Cannot build for Linux platform.
+[00:00:605] Found Windows SDK v10_0_22621_0 at C:\Program Files (x86)\Windows Kits\10\
+[00:00:605] Found Windows SDK v10_0_26100_0 at C:\Program Files (x86)\Windows Kits\10\
+[00:00:614] Found VisualStudio2022 at C:\Program Files\Microsoft Visual Studio\2022\Community
+[00:00:615] Found Windows toolset v143 at C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130
+[00:00:615] Found Windows toolset v144 at C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207
+[00:00:617] Found Emscripten SDK 5.0.7 at E:\Work\emsdk
+[00:00:617] Cleaning build workspace...
+[00:00:618] Removing: E:\Work\FlaxEngine\Cache/Intermediate\TaskGraph.cache
+[00:00:790] Removing: E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development
+[00:00:859] Removing: E:\Work\FlaxEngine\Source\Platforms\Web\Binaries\Game\x86\Development
+[00:00:862] Building targets...
+[00:00:902] Building target FlaxGame in Development for Web x86
+[00:00:903] Clang version: 23.0.0
+[00:00:908] Parsing API bindings for Profiler (FlaxEngine)
+[00:00:947] Parsing API bindings for Platform (FlaxEngine)
+[00:01:014] Parsing API bindings for Core (FlaxEngine)
+[00:01:375] Parsing API bindings for Physics (FlaxEngine)
+[00:01:412] Parsing API bindings for AudioTool (FlaxEngine)
+[00:01:423] Parsing API bindings for TextureTool (FlaxEngine)
+[00:01:425] Parsing API bindings for ModelTool (FlaxEngine)
+[00:01:429] Parsing API bindings for GraphicsDeviceWebGPU (FlaxEngine)
+[00:01:430] Parsing API bindings for Graphics (FlaxEngine)
+[00:01:553] Parsing API bindings for Utilities (FlaxEngine)
+[00:01:557] Parsing API bindings for Particles (FlaxEngine)
+[00:01:562] Parsing API bindings for Content (FlaxEngine)
+[00:01:594] Parsing API bindings for Renderer (FlaxEngine)
+[00:01:605] Parsing API bindings for Scripting (FlaxEngine)
+[00:01:615] Parsing API bindings for Serialization (FlaxEngine)
+[00:01:616] Parsing API bindings for Level (FlaxEngine)
+[00:01:660] Parsing API bindings for Navigation (FlaxEngine)
+[00:01:664] Parsing API bindings for AI (FlaxEngine)
+[00:01:671] Parsing API bindings for Visject (FlaxEngine)
+[00:01:674] Parsing API bindings for Animations (FlaxEngine)
+[00:01:694] Parsing API bindings for Audio (FlaxEngine)
+[00:01:700] Parsing API bindings for Video (FlaxEngine)
+[00:01:702] Parsing API bindings for Debug (FlaxEngine)
+[00:01:714] Parsing API bindings for Foliage (FlaxEngine)
+[00:01:723] Parsing API bindings for Render2D (FlaxEngine)
+[00:01:760] Parsing API bindings for Input (FlaxEngine)
+[00:01:768] Parsing API bindings for Networking (FlaxEngine)
+[00:01:780] Parsing API bindings for Streaming (FlaxEngine)
+[00:01:781] Parsing API bindings for Terrain (FlaxEngine)
+[00:01:788] Parsing API bindings for Threading (FlaxEngine)
+[00:01:791] Parsing API bindings for Localization (FlaxEngine)
+[00:01:794] Parsing API bindings for UI (FlaxEngine)
+[00:01:797] Parsing API bindings for Online (FlaxEngine)
+[00:01:804] Parsing API bindings for Engine (FlaxEngine)
+[00:01:808] Generating binary module bindings for FlaxEngine
+[00:01:960] Skipped saving file to E:\Work\FlaxEngine\Source\FlaxEngine.Gen.h
+[00:01:960] Skipped saving file to E:\Work\FlaxEngine\Source\FlaxEngine.Gen.cpp
+[00:01:961] Building module SDL
+[00:01:962] Building module Profiler
+[00:01:965] Generating API bindings for Profiler (FlaxEngine)
+[00:01:972] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Profiler\Profiler.Bindings.Gen.cpp
+[00:01:978] Building module Platform
+[00:01:980] Generating API bindings for Platform (FlaxEngine)
+[00:01:982] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Platform\Platform.Bindings.Gen.cpp
+[00:01:983] Building module fmt
+[00:01:983] Building module Core
+[00:01:984] Generating API bindings for Core (FlaxEngine)
+[00:01:985] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Core\Core.Bindings.Gen.cpp
+[00:01:986] Building module Main
+[00:01:986] Building module PhysX
+[00:01:986] Building module NvCloth
+[00:01:986] Building module Physics
+[00:01:986] Generating API bindings for Physics (FlaxEngine)
+[00:01:989] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Physics\Physics.Bindings.Gen.cpp
+[00:01:990] Building module lz4
+[00:01:990] Building module minimp3
+[00:01:990] Building module ogg
+[00:01:990] Building module vorbis
+[00:01:990] Building module AudioTool
+[00:01:990] Generating API bindings for AudioTool (FlaxEngine)
+[00:01:990] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\AudioTool\AudioTool.Bindings.Gen.cpp
+[00:01:990] Building module stb
+[00:01:990] Building module basis_universal
+[00:01:990] Building module TextureTool
+[00:01:990] Generating API bindings for TextureTool (FlaxEngine)
+[00:01:991] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\TextureTool\TextureTool.Bindings.Gen.cpp
+[00:01:991] Building module ModelTool
+[00:01:991] Generating API bindings for ModelTool (FlaxEngine)
+[00:01:991] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\ModelTool\ModelTool.Bindings.Gen.cpp
+[00:01:991] Building module GraphicsDeviceWebGPU
+[00:01:992] Building module Graphics
+[00:01:992] Generating API bindings for Graphics (FlaxEngine)
+[00:01:998] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Graphics\Graphics.Bindings.Gen.cpp
+[00:01:999] Building module Utilities
+[00:01:999] Generating API bindings for Utilities (FlaxEngine)
+[00:01:999] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Utilities\Utilities.Bindings.Gen.cpp
+[00:02:000] Building module Particles
+[00:02:000] Generating API bindings for Particles (FlaxEngine)
+[00:02:001] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Particles\Particles.Bindings.Gen.cpp
+[00:02:001] Building module Content
+[00:02:002] Generating API bindings for Content (FlaxEngine)
+[00:02:002] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Content\Content.Bindings.Gen.cpp
+[00:02:007] Building module Renderer
+[00:02:007] Generating API bindings for Renderer (FlaxEngine)
+[00:02:007] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Renderer\Renderer.Bindings.Gen.cpp
+[00:02:010] Building module Scripting
+[00:02:010] Generating API bindings for Scripting (FlaxEngine)
+[00:02:011] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Scripting\Scripting.Bindings.Gen.cpp
+[00:02:011] Building module rapidjson
+[00:02:011] Building module Serialization
+[00:02:011] Generating API bindings for Serialization (FlaxEngine)
+[00:02:012] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Serialization\Serialization.Bindings.Gen.cpp
+[00:02:012] Building module Level
+[00:02:012] Generating API bindings for Level (FlaxEngine)
+[00:02:014] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Level\Level.Bindings.Gen.cpp
+[00:02:015] Building module recastnavigation
+[00:02:015] Building module Navigation
+[00:02:015] Generating API bindings for Navigation (FlaxEngine)
+[00:02:015] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Navigation\Navigation.Bindings.Gen.cpp
+[00:02:016] Building module AI
+[00:02:016] Generating API bindings for AI (FlaxEngine)
+[00:02:017] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\AI\AI.Bindings.Gen.cpp
+[00:02:017] Building module Visject
+[00:02:018] Generating API bindings for Visject (FlaxEngine)
+[00:02:018] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Visject\Visject.Bindings.Gen.cpp
+[00:02:018] Building module Animations
+[00:02:019] Generating API bindings for Animations (FlaxEngine)
+[00:02:019] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Animations\Animations.Bindings.Gen.cpp
+[00:02:019] Building module Audio
+[00:02:020] Generating API bindings for Audio (FlaxEngine)
+[00:02:020] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Audio\Audio.Bindings.Gen.cpp
+[00:02:020] Building module Video
+[00:02:020] Generating API bindings for Video (FlaxEngine)
+[00:02:020] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Video\Video.Bindings.Gen.cpp
+[00:02:021] Building module Debug
+[00:02:021] Generating API bindings for Debug (FlaxEngine)
+[00:02:021] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Debug\Debug.Bindings.Gen.cpp
+[00:02:021] Building module Foliage
+[00:02:021] Generating API bindings for Foliage (FlaxEngine)
+[00:02:021] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Foliage\Foliage.Bindings.Gen.cpp
+[00:02:022] Building module freetype
+[00:02:022] Building module msdfgen
+[00:02:022] Building module Render2D
+[00:02:022] Generating API bindings for Render2D (FlaxEngine)
+[00:02:022] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Render2D\Render2D.Bindings.Gen.cpp
+[00:02:023] Building module Input
+[00:02:023] Generating API bindings for Input (FlaxEngine)
+[00:02:023] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Input\Input.Bindings.Gen.cpp
+[00:02:024] Building module Networking
+[00:02:024] Generating API bindings for Networking (FlaxEngine)
+[00:02:025] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Networking\Networking.Bindings.Gen.cpp
+[00:02:026] Building module Streaming
+[00:02:026] Generating API bindings for Streaming (FlaxEngine)
+[00:02:027] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Streaming\Streaming.Bindings.Gen.cpp
+[00:02:027] Building module Terrain
+[00:02:033] Generating API bindings for Terrain (FlaxEngine)
+[00:02:034] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Terrain\Terrain.Bindings.Gen.cpp
+[00:02:035] Building module Threading
+[00:02:035] Generating API bindings for Threading (FlaxEngine)
+[00:02:036] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Threading\Threading.Bindings.Gen.cpp
+[00:02:036] Building module Localization
+[00:02:036] Generating API bindings for Localization (FlaxEngine)
+[00:02:036] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Localization\Localization.Bindings.Gen.cpp
+[00:02:036] Building module UI
+[00:02:036] Generating API bindings for UI (FlaxEngine)
+[00:02:037] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\UI\UI.Bindings.Gen.cpp
+[00:02:037] Building module Online
+[00:02:037] Generating API bindings for Online (FlaxEngine)
+[00:02:038] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Online\Online.Bindings.Gen.cpp
+[00:02:053] Building module Engine
+[00:02:054] Generating API bindings for Engine (FlaxEngine)
+[00:02:054] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\Engine\Engine.Bindings.Gen.cpp
+[00:02:057] Saved file to E:\Work\FlaxEngine\Cache/Intermediate\FlaxGame\Web\x86\Development\FlaxGame.html.response
+[00:02:060] Saved file to E:\Work\FlaxEngine\Source\Platforms\Web\Binaries\Game\x86\Development\FlaxGame.Build.json
+[00:02:069] Missing Task Graph cache file
+[00:02:069] 
+[00:02:069] Total 457 tasks
+[00:02:070] Executing 457 tasks using 32 threads
+[00:02:071] ProbesRenderer.cpp
+[00:02:071] EnvironmentProbe.cpp
+[00:02:071] Level.Bindings.Gen.cpp
+[00:02:071] Engine.cpp
+[00:02:071] GPUDevice.cpp
+[00:02:071] Renderer.cpp
+[00:02:071] AnimatedModel.cpp
+[00:02:071] Foliage.cpp
+[00:02:071] ParticleEffect.cpp
+[00:02:071] Level.cpp
+[00:02:071] PhysicsBackendPhysX.cpp
+[00:02:071] RenderTask.cpp
+[00:02:071] GlobalSurfaceAtlasPass.cpp
+[00:02:071] Graphics.Bindings.Gen.cpp
+[00:02:071] Particles.cpp
+[00:02:071] TerrainPatch.cpp
+[00:02:071] ScreenSpaceReflectionsPass.cpp
+[00:02:071] VolumeParticleMaterialShader.cpp
+[00:02:071] ModelTool.cpp
+[00:02:071] Navigation.cpp
+[00:02:072] SceneAnimationPlayer.cpp
+[00:02:072] ReflectionsPass.cpp
+[00:02:072] DebugDraw.cpp
+[00:02:072] ParticleMaterialShader.cpp
+[00:02:072] DynamicDiffuseGlobalIllumination.cpp
+[00:02:072] ShaderAssetBase.cpp
+[00:02:072] GlobalSignDistanceFieldPass.cpp
+[00:02:072] StaticModel.cpp
+[00:02:072] LightmapUVsDensity.cpp
+[00:02:072] Terrain.cpp
+[00:02:072] Ragdoll.cpp
+[00:02:072] ShadowsPass.cpp
+[00:03:978] GBufferPass.cpp
+[00:04:016] Model.cpp
+[00:04:273] ParticleEmitter.cpp
+[00:04:323] MaterialShaderFeatures.cpp
+[00:04:868] Cloth.cpp
+[00:05:225] Content.Bindings.Gen.cpp
+[00:05:225] VolumetricFogPass.cpp
+[00:05:226] AtmospherePreCompute.cpp
+[00:05:227] Sky.cpp
+[00:05:227] SkyLight.cpp
+[00:05:374] TerrainMaterialShader.cpp
+[00:05:517] Scene.cpp
+[00:05:518] ExponentialHeightFog.cpp
+[00:05:526] Actor.cpp
+[00:05:553] NavModifierVolume.cpp
+[00:05:583] MotionBlurPass.cpp
+[00:05:597] NavMeshBuilder.cpp
+[00:05:665] LightPass.cpp
+[00:05:682] QuadOverdrawPass.cpp
+[00:05:737] DeferredMaterialShader.cpp
+[00:05:844] Camera.cpp
+[00:05:875] PostProcessingPass.cpp
+[00:05:879] Physics.Bindings.Gen.cpp
+[00:05:928] TAA.cpp
+[00:06:037] NavMeshBoundsVolume.cpp
+[00:06:120] ForwardMaterialShader.cpp
+[00:06:151] SkinnedMesh.cpp
+[00:06:161] ParticleEmitterGraph.CPU.cpp
+[00:06:197] EyeAdaptationPass.cpp
+[00:06:366] DeformableMaterialShader.cpp
+[00:06:499] AmbientOcclusionPass.cpp
+[00:06:752] Mesh.cpp
+[00:07:309] TextRender.cpp
+[00:07:342] ColorGradingPass.cpp
+[00:07:350] SDLWindow.cpp
+[00:07:443] ForwardPass.cpp
+[00:07:582] Content.cpp
+[00:07:839] HistogramPass.cpp
+[00:07:883] MaterialComplexity.cpp
+[00:07:923] DepthOfFieldPass.cpp
+[00:08:014] GameSettings.cpp
+[00:08:017] TerrainChunk.cpp
+[00:08:018] ContrastAdaptiveSharpeningPass.cpp
+[00:08:068] LODPreview.cpp
+[00:08:132] SplineModel.cpp
+[00:08:191] Prefab.Apply.cpp
+[00:08:263] SkinnedModel.cpp
+[00:08:287] Render2D.cpp
+[00:08:358] MaterialParams.cpp
+[00:08:468] AudioSource.cpp
+[00:08:602] RenderList.cpp
+[00:08:701] FXAA.cpp
+[00:08:721] PrefabManager.cpp
+[00:09:145] GameBase.cpp
+[00:09:147] Lightmap.cpp
+[00:09:244] GPUParticles.cpp
+[00:09:335] BoneSocket.cpp
+[00:09:426] SMAA.cpp
+[00:09:451] RenderBuffers.cpp
+[00:09:452] Material.cpp
+[00:09:569] SDLPlatform.Linux.cpp
+[00:09:580] Screenshot.cpp
+[00:09:583] SDLInput.cpp
+[00:09:716] Screen.cpp
+[00:09:723] Particles.Bindings.Gen.cpp
+[00:10:001] WheeledVehicle.cpp
+[00:10:023] TextureTool.stb.cpp
+[00:10:435] ModelTool.Assimp.cpp
+[00:10:498] Animations.Bindings.Gen.cpp
+[00:10:554] MaterialShader.cpp
+[00:10:557] NavMesh.cpp
+[00:10:991] BoxCollider.cpp
+[00:11:054] SplineCollider.cpp
+[00:11:109] SceneObjectsFactory.cpp
+[00:11:172] Scripting.cpp
+[00:11:186] BehaviorTreeNodes.cpp
+[00:11:187] Networking.Bindings.Gen.cpp
+[00:11:200] Animation.cpp
+[00:11:246] ParticleSystem.cpp
+[00:11:248] Script.cpp
+[00:11:356] RenderView.cpp
+[00:11:424] Collider.cpp
+[00:11:479] ParticleEmitterGraph.CPU.Particles.cpp
+[00:11:480] LinuxGame.cpp
+[00:11:562] SceneCSGData.cpp
+[00:11:721] BoxBrush.cpp
+[00:11:911] TextureTool.cpp
+[00:12:039] RenderGraph.cpp
+[00:12:055] Core.Bindings.Gen.cpp
+[00:12:105] Skybox.cpp
+[00:12:181] SceneRendering.cpp
+[00:12:265] RenderTools.cpp
+[00:12:302] SpriteRender.cpp
+[00:12:316] Light.cpp
+[00:12:392] PhysicsBackendEmpty.cpp
+[00:12:460] AI.Bindings.Gen.cpp
+[00:12:504] PointLight.cpp
+[00:12:521] TextureTool.basis_universal.cpp
+[00:12:521] Texture.cpp
+[00:12:521] SpotLight.cpp
+[00:12:538] Decal.cpp
+[00:12:539] JsonAsset.cpp
+[00:12:596] UI.Bindings.Gen.cpp
+[00:13:176] NavLink.cpp
+[00:13:318] Platform.Bindings.Gen.cpp
+[00:13:462] FoliageType.cpp
+[00:13:614] AnimGroup.Animation.cpp
+[00:13:689] PostFxVolume.cpp
+[00:13:997] Animations.cpp
+[00:14:173] DirectionalLight.cpp
+[00:14:174] WindowBase.cpp
+[00:14:199] Renderer.Bindings.Gen.cpp
+[00:14:220] DecalMaterialShader.cpp
+[00:14:222] TextureBase.cpp
+[00:14:260] BinaryAsset.cpp
+[00:14:261] SDLPlatform.Mac.cpp
+[00:14:267] TerrainManager.cpp
+[00:14:278] VisualScript.cpp
+[00:14:307] Scripting.Bindings.Gen.cpp
+[00:14:308] NavCrowd.cpp
+[00:14:354] Input.Bindings.Gen.cpp
+[00:14:369] FontManager.cpp
+[00:14:380] PostFxMaterialShader.cpp
+[00:14:427] Terrain.Bindings.Gen.cpp
+[00:14:431] NavMeshRuntime.cpp
+[00:14:695] ModelInstanceEntry.cpp
+[00:14:779] Audio.Bindings.Gen.cpp
+[00:14:804] Behavior.cpp
+[00:15:120] StreamingTexture.cpp
+[00:15:301] GUIMaterialShader.cpp
+[00:15:312] BehaviorTree.cpp
+[00:15:339] NetworkReplicator.cpp
+[00:15:339] Video.cpp
+[00:15:371] AnimGraph.Custom.cpp
+[00:15:413] ShaderCacheManager.cpp
+[00:15:469] AnimationGraph.cpp
+[00:15:553] ShaderGraphUtilities.cpp
+[00:15:740] ModelTool.OpenFBX.cpp
+[00:15:857] Input.cpp
+[00:15:874] MultiScaler.cpp
+[00:15:946] AnimGraph.cpp
+[00:15:989] BitonicSort.cpp
+[00:15:991] VertexColors.cpp
+[00:16:009] ModelData.Tool.cpp
+[00:16:009] Render2D.Bindings.Gen.cpp
+[00:16:063] AnimGraph.Base.cpp
+[00:16:122] BehaviorKnowledge.cpp
+[00:16:214] Navigation.Bindings.Gen.cpp
+[00:16:308] SplineRopeBody.cpp
+[00:16:423] CollisionCooking.cpp
+[00:16:456] GPUSwapChainWebGPU.cpp
+[00:16:457] SceneQuery.cpp
+[00:16:466] SimulationEventCallbackPhysX.cpp
+[00:16:467] GPUBuffer.cpp
+[00:16:467] CollisionData.cpp
+[00:16:717] MeshCollider.cpp
+[00:16:780] StreamingHandlers.cpp
+[00:17:271] AudioListener.cpp
+[00:17:353] ModelBase.cpp
+[00:17:353] PostProcessSettings.cpp
+[00:17:353] MeshBase.cpp
+[00:17:485] Foliage.Bindings.Gen.cpp
+[00:17:572] CharacterController.cpp
+[00:17:613] MeshAccelerationStructure.cpp
+[00:17:692] SceneLightmapsData.cpp
+[00:17:815] GPUTexture.cpp
+[00:17:958] Engine.Bindings.Gen.cpp
+[00:17:984] SceneTicking.cpp
+[00:17:985] Physics.cpp
+[00:18:122] Stream.cpp
+[00:18:122] ScriptingObject.cpp
+[00:18:250] GPUDeviceWebGPU.cpp
+[00:18:268] FoliageCluster.cpp
+[00:18:269] ParticlesSimulation.cpp
+[00:18:269] AudioClip.cpp
+[00:18:271] ParticlesData.cpp
+[00:18:327] SkeletonMask.cpp
+[00:18:691] FlaxStorage.cpp
+[00:18:726] Graphics.cpp
+[00:18:796] Joint.cpp
+[00:18:864] RigidBody.cpp
+[00:18:977] Video.Bindings.Gen.cpp
+[00:18:979] EngineInternalCalls.cpp
+[00:19:037] ModelTool.Bindings.Gen.cpp
+[00:19:141] MacGame.cpp
+[00:19:187] D6Joint.cpp
+[00:19:258] JsonStorageProxy.cpp
+[00:19:342] SDLPlatform.cpp
+[00:19:362] ModelData.cpp
+[00:19:365] CapsuleCollider.cpp
+[00:19:455] AudioBackendOAL.cpp
+[00:19:626] Serialization.cpp
+[00:19:718] ParticleEmitterFunction.cpp
+[00:19:865] SphereCollider.cpp
+[00:19:974] Streaming.cpp
+[00:19:998] DynamicBuffer.cpp
+[00:20:020] SceneAnimation.cpp
+[00:20:036] Localization.Bindings.Gen.cpp
+[00:20:038] GPUContext.cpp
+[00:20:095] Spline.cpp
+[00:20:117] SceneObject.cpp
+[00:20:121] Prefab.cpp
+[00:20:514] PlatformBase.cpp
+[00:20:577] SceneInfo.cpp
+[00:20:587] LocalizedStringTable.cpp
+[00:20:633] ModelTool.AutodeskFbxSdk.cpp
+[00:20:634] GPUContextWebGPU.cpp
+[00:20:815] Online.Bindings.Gen.cpp
+[00:20:832] VisjectGraph.cpp
+[00:21:101] SphericalJoint.cpp
+[00:21:107] DotNet.cpp
+[00:21:116] SliderJoint.cpp
+[00:21:534] HingeJoint.cpp
+[00:21:655] DistanceJoint.cpp
+[00:21:797] Localization.cpp
+[00:21:821] AnimationGraphFunction.cpp
+[00:21:864] MaterialFunction.cpp
+[00:21:882] ModelInstanceActor.cpp
+[00:21:888] UICanvas.cpp
+[00:21:890] SpriteAtlas.cpp
+[00:21:946] UIControl.cpp
+[00:21:947] JsonWriter.cpp
+[00:21:988] FontTextureAtlas.cpp
+[00:22:041] PhysicsStepperPhysX.cpp
+[00:22:215] ShaderGraph.cpp
+[00:22:300] Mono.cpp
+[00:22:300] Threading.Bindings.Gen.cpp
+[00:22:311] JsonTools.cpp
+[00:22:322] BoxVolume.cpp
+[00:22:370] WindowsGame.cpp
+[00:22:708] FontAsset.cpp
+[00:22:709] Streaming.Bindings.Gen.cpp
+[00:22:712] GraphUtilities.cpp
+[00:22:739] ParticleEmitterGraph.CPU.ParticleModules.cpp
+[00:22:954] MaterialInstance.cpp
+[00:23:173] TextureTool.Bindings.Gen.cpp
+[00:23:196] AssetsCache.cpp
+[00:23:215] AudioBackendNone.cpp
+[00:23:241] MaterialBase.cpp
+[00:23:415] Time.cpp
+[00:23:415] AudioTool.cpp
+[00:23:416] NetworkTransform.cpp
+[00:23:451] Shader.cpp
+[00:23:476] ContentStorageManager.cpp
+[00:23:567] Asset.cpp
+[00:23:568] PluginManager.cpp
+[00:23:601] GPUPipelineStateWebGPU.cpp
+[00:23:608] GPUSwapChain.cpp
+[00:23:659] NetworkManager.cpp
+[00:23:659] VideoPlayer.cpp
+[00:23:835] BinaryAssetFactory.cpp
+[00:23:949] Log.cpp
+[00:24:008] MeshDeformation.cpp
+[00:24:087] MUtils.cpp
+[00:24:180] Visject.Bindings.Gen.cpp
+[00:24:226] RawDataAsset.cpp
+[00:24:357] MCore.cpp
+[00:24:468] WindowsManager.cpp
+[00:24:478] GPUShaderWebGPU.cpp
+[00:24:614] Audio.cpp
+[00:24:614] ManagedSerialization.cpp
+[00:24:704] Variant.cpp
+[00:24:894] DefaultGPUTasksExecutor.cpp
+[00:24:920] CubeTexture.cpp
+[00:24:922] IESProfile.cpp
+[00:24:942] RenderGraphResourceManager.cpp
+[00:25:062] RenderGraphExecutor.cpp
+[00:25:109] Font.cpp
+[00:25:288] RenderTargetPool.cpp
+[00:25:480] SDLPlatform.Windows.cpp
+[00:25:546] BinaryModule.cpp
+[00:25:637] ProfilingTools.cpp
+[00:25:678] ThreadPool.cpp
+[00:25:705] GameplayGlobals.cpp
+[00:25:844] NetworkPeer.cpp
+[00:25:930] NetworkLagDriver.cpp
+[00:25:931] DebugCommands.cpp
+[00:26:000] LogContext.cpp
+[00:26:022] GPUTasksManager.cpp
+[00:26:050] FixedJoint.cpp
+[00:26:278] JobSystem.cpp
+[00:26:290] WebPlatform.cpp
+[00:26:293] Profiler.Bindings.Gen.cpp
+[00:26:310] GPUTasksContext.cpp
+[00:26:395] SkinnedMeshDrawData.cpp
+[00:26:404] ProfilerGPU.cpp
+[00:26:411] DebugLog.cpp
+[00:26:439] ENetDriver.cpp
+[00:26:442] FileSystemBase.cpp
+[00:26:598] GPUShader.cpp
+[00:26:613] ProfilerMemory.cpp
+[00:26:647] NetworkReplicationHierarchy.cpp
+[00:26:695] GPUVertexLayout.cpp
+[00:26:737] PhysicsColliderActor.cpp
+[00:27:070] Utilities.Bindings.Gen.cpp
+[00:27:141] GPUTextureWebGPU.cpp
+[00:27:299] Debug.Bindings.Gen.cpp
+[00:27:378] GPUTasksExecutor.cpp
+[00:27:407] RenderGraphTest.cpp
+[00:27:429] ActorsCache.cpp
+[00:27:429] ManagedDictionary.cpp
+[00:27:513] RenderGraphDebug.cpp
+[00:27:629] GPUBufferWebGPU.cpp
+[00:27:818] MainThreadManagedInvokeAction.cpp
+[00:27:850] FileBase.cpp
+[00:27:872] OggVorbisDecoder.cpp
+[00:27:892] ObjectsRemovalService.cpp
+[00:28:086] ProfilerCPU.cpp
+[00:28:223] AudioTool.Bindings.Gen.cpp
+[00:28:224] EmptyActor.cpp
+[00:28:293] CultureInfo.cpp
+[00:28:317] Serialization.Bindings.Gen.cpp
+[00:28:332] GPUSamplerWebGPU.cpp
+[00:28:625] GPUSampler.cpp
+[00:28:627] ThreadBase.cpp
+[00:28:661] Task.cpp
+[00:28:669] OggVorbisEncoder.cpp
+[00:28:697] Tags.cpp
+[00:28:699] UnixFileSystem.cpp
+[00:28:700] SDLPlatform.Web.cpp
+[00:28:725] StdTypesContainer.cpp
+[00:28:922] StringUtilsBase.cpp
+[00:29:050] TaskGraph.cpp
+[00:29:091] None.cpp
+[00:29:102] NetworkStream.cpp
+[00:29:112] MainThreadTask.cpp
+[00:29:217] ShaderGraphValue.cpp
+[00:29:250] RenderGraphCompiler.cpp
+[00:29:413] Online.cpp
+[00:29:414] FileReadStream.cpp
+[00:29:490] Gamepad.cpp
+[00:29:491] UnixThread.cpp
+[00:29:505] FileWriteStream.cpp
+[00:29:506] UnixFile.cpp
+[00:29:571] MP3Decoder.cpp
+[00:29:615] GraphParameter.cpp
+[00:29:625] ThreadRegistry.cpp
+[00:29:789] WaveDecoder.cpp
+[00:29:964] NavMeshData.cpp
+[00:29:980] EngineService.cpp
+[00:29:986] TextProcessing.cpp
+[00:30:007] UnixNetwork.cpp
+[00:30:031] main.cpp
+[00:30:084] Exception.cpp
+[00:30:126] AnimationData.cpp
+[00:30:195] PixelFormatExtensions.cpp
+[00:30:328] FlaxEngine.Gen.cpp
+[00:30:362] Cache.cpp
+[00:30:364] OrientedBoundingBox.cpp
+[00:30:378] CollisionsHelper.cpp
+[00:30:381] MemoryWriteStream.cpp
+[00:30:435] Matrix.cpp
+[00:30:620] Vector3.cpp
+[00:30:754] Transform.cpp
+[00:30:814] BoundingBox.cpp
+[00:30:957] BoundingFrustum.cpp
+[00:31:070] Quaternion.cpp
+[00:31:277] BoundingSphere.cpp
+[00:31:292] Ray.cpp
+[00:31:296] Viewport.cpp
+[00:31:303] Matrix3x3.cpp
+[00:31:322] Allocation.cpp
+[00:31:393] Plane.cpp
+[00:31:401] Vector4.cpp
+[00:31:461] CommandLine.cpp
+[00:31:523] UWPGame.cpp
+[00:31:532] VisjectMeta.cpp
+[00:31:537] Version.cpp
+[00:31:573] Half.cpp
+[00:31:663] Packed.cpp
+[00:31:684] Color.cpp
+[00:31:969] Color32.cpp
+[00:31:982] Globals.cpp
+[00:32:006] Vector2.cpp
+[00:32:007] ShaderStringBuilder.cpp
+[00:32:008] InverseKinematics.cpp
+[00:32:019] Noise.cpp
+[00:32:175] DateTime.cpp
+[00:32:419] StringView.cpp
+[00:32:425] Rectangle.cpp
+[00:32:477] String.cpp
+[00:32:584] Math.cpp
+[00:32:584] RenderToolsWebGPU.cpp
+[00:32:860] StreamingGroup.cpp
+[00:32:937] Guid.cpp
+[00:32:974] TimeSpan.cpp
+[00:32:986] NetworkBase.cpp
+[00:33:164] Encryption.cpp
+[00:33:176] StateMachine.cpp
+[00:33:241] MemoryReadStream.cpp
+[00:33:249] Sorting.cpp
+[00:33:296] Crc.cpp
+[00:33:322] VertexTriangleAdjacency.cpp
+[00:33:346] UnixPlatform.cpp
+[00:33:415] SpatialSort.cpp
+[00:33:434] UnixStringUtils.cpp
+[00:33:437] DetourCrowd.cpp
+[00:33:528] DetourTileCache.cpp
+[00:33:679] DetourNavMeshQuery.cpp
+[00:33:729] DetourPathCorridor.cpp
+[00:33:730] DetourLocalBoundary.cpp
+[00:33:738] DetourPathQueue.cpp
+[00:33:740] DetourNavMesh.cpp
+[00:33:748] DetourNavMeshBuilder.cpp
+[00:33:748] DetourNode.cpp
+[00:33:748] DetourTileCacheBuilder.cpp
+[00:33:748] DetourObstacleAvoidance.cpp
+[00:33:748] DetourProximityGrid.cpp
+[00:33:757] RecastMesh.cpp
+[00:33:757] Recast.cpp
+[00:33:785] RecastContour.cpp
+[00:33:812] RecastArea.cpp
+[00:33:814] RecastRegion.cpp
+[00:33:864] RecastLayers.cpp
+[00:33:874] RecastMeshDetail.cpp
+[00:34:042] RecastRasterization.cpp
+[00:34:091] RecastAlloc.cpp
+[00:34:105] DetourCommon.cpp
+[00:34:179] RecastFilter.cpp
+[00:34:180] DetourAlloc.cpp
+[00:34:188] DetourAssert.cpp
+[00:34:265] RecastAssert.cpp
+[00:34:278] lz4.cpp
+[00:34:287] format.cpp
+[00:35:868] Linking E:\Work/FlaxEngine/Source/Platforms/Web/Binaries/Game/x86/Development/FlaxGame.html
+[00:45:805] Done!
+[00:45:847] Total time: 00:00:45.8555272
+[00:45:847] End.

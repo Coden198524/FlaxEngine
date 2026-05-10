@@ -1,0 +1,18 @@
+[ 06:21:49.011 ]: [Warning] Unix::errno(): No such file or directory
+[ 06:21:49.012 ]: [Warning] Cannot open file '/Content/head'
+================================================================
+[ 06:21:49.012 ]: [Error] Critical error! Reason: Cannot load game.
+[ 06:21:49.012 ]: [Error] Stack trace:
+[ 06:21:49.012 ]: [Error]     at FlaxGame.wasm.Engine::OnInit(char16_t const*) (http://localhost:8000/FlaxGame.wasm:wasm-function[10224]:0x6475c6)0x0
+[ 06:21:49.012 ]: [Error]     at FlaxGame.wasm.main (http://localhost:8000/FlaxGame.wasm:wasm-function[1962]:0x353102)0x0
+[ 06:21:49.013 ]: [Error]     at callMain (http://localhost:8000/FlaxGame.js:22411:15)0x0
+[ 06:21:49.013 ]: [Error]     at doRun (http://localhost:8000/FlaxGame.js:22454:30)0x0
+[ 06:21:49.013 ]: [Error] Total Used Physical Memory: 32 Mb (1p)
+[ 06:21:49.013 ]: [Error] Total Used Virtual Memory: 32 Mb (1p)
+[ 06:21:49.013 ]: [Error] Process Used Physical Memory: 1 Mb (0p)
+[ 06:21:49.013 ]: [Error] Process Used Virtual Memory: 1 Mb (0p)
+[ 06:21:49.013 ]: [Error] External Used Physical Memory: 31 Mb (1p)
+[ 06:21:49.013 ]: [Error] External Used Virtual Memory: 31 Mb (1p)
+================================================================
+ Total errors: 12
+================================================================
